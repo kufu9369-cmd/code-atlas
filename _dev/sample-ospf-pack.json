@@ -1,0 +1,155 @@
+{
+  "id": "ospf-adv",
+  "name": "OSPF 进阶",
+  "version": "1.0",
+  "desc": "NSSA、虚连接、邻居卡住排查 —— 接着内置的多区域实验往下走。",
+  "categories": [
+    {
+      "id": "ospf-adv",
+      "name": "OSPF 进阶",
+      "icon": "switch",
+      "short": "OSPF",
+      "ext": "cfg",
+      "items": [
+        {
+          "id": "ospf-nssa",
+          "title": "NSSA 区域：末梢区域还要引外部路由",
+          "desc": "普通 stub 不收 Type 5 外部路由，但分支自己有外部路由要发布时用 NSSA，只放 Type 7。",
+          "tags": ["OSPF", "NSSA", "区域类型"],
+          "code": "system-view\nospf {{proc}}\n area {{areaId}}\n  nssa\n  quit\n quit\n\n# 分支设备上把直连外部网段引入（Type 7 只在 NSSA 内泛洪）\nospf {{proc}}\n import-route direct\n quit",
+          "vars": {
+            "proc": { "label": "OSPF 进程号", "value": "1", "hint": "1–65535", "desc": "本机进程号，只在本地有效，两端不一致不影响建邻居。" },
+            "areaId": { "label": "NSSA 区域号", "value": "1", "hint": "非 0", "desc": "NSSA 不能是骨干区域，Area 0 必须是普通区域。" }
+          },
+          "docs": {
+            "secs": [
+              { "h": "NSSA 和 Stub 的差别", "p": "Stub 连 Type 5 都不收，只靠默认路由出去；NSSA 不收 Type 5，但允许把本区域的外部路由以 Type 7 泛洪，再由 ABR 转成 Type 5 发给骨干。" },
+              { "h": "两边必须都配 nssa", "p": "同一区域内所有路由器都要打 nssa，漏一台就会卡在 ExStart 或邻居反复重建。" }
+            ],
+            "src": { "n": "华为官方 · S5700 配置指南-IP单播路由（OSPF）", "u": "https://support.huawei.com/enterprise/zh/doc/EDOC1100459458/c9060695" }
+          }
+        },
+        {
+          "id": "ospf-vlink",
+          "title": "虚连接：区域被切断时把骨干接回来",
+          "desc": "非骨干区域没有直连 Area 0 时，穿过中转区域拉一条逻辑链路，让骨干连起来。",
+          "tags": ["OSPF", "虚连接", "ABR"],
+          "code": "system-view\nospf {{proc}}\n area {{transArea}}\n  vlink-peer {{peerRid}}\n  quit\n quit",
+          "vars": {
+            "proc": { "label": "OSPF 进程号", "value": "1", "hint": "1–65535", "desc": "两端进程号可以不同，不影响虚连接建立。" },
+            "transArea": { "label": "中转区域号", "value": "1", "hint": "非 0", "desc": "虚连接所穿过的区域，两端必须都在这块区域里有接口。" },
+            "peerRid": { "label": "对端 Router ID", "value": "3.3.3.3", "hint": "点分十进制", "desc": "填对端的 Router ID，不是接口地址；填错会一直停在 down。" }
+          },
+          "docs": {
+            "secs": [
+              { "h": "什么时候才需要虚连接", "p": "非骨干区域和骨干区域之间没有物理链路、但业务又要求它挂在 Area 0 上时。临时救急可以，长期建议改物理拓扑。" },
+              { "h": "vlink 的状态怎么查", "p": "display ospf vlink，State 显示 Full 才算通；Down 一般是中转区域没通，或者对端 Router ID 填错。" }
+            ],
+            "src": { "n": "华为官方 · S5700 配置指南-IP单播路由（OSPF）", "u": "https://support.huawei.com/enterprise/zh/doc/EDOC1100459458/c9060695" }
+          }
+        }
+      ]
+    }
+  ],
+  "labs": [
+    {
+      "id": "lab-ospf-vlink",
+      "title": "虚连接：把断开的骨干补回来",
+      "level": "综合",
+      "minutes": 30,
+      "goal": "Area 2 没有直连 Area 0，靠穿过 Area 1 的虚连接让骨干连续，Area 2 的路由能进骨干。",
+      "scene": "企业兼并后新分支的区域号沿用了老规划，物理上又只有一条链路连到中转区域 —— 短期用虚连接救，长期要改拓扑。",
+      "topo": {
+        "h": 260,
+        "nodes": [
+          { "id": "R1", "label": "R1", "sub": "Area 0", "t": "router", "x": 110, "y": 130 },
+          { "id": "R2", "label": "R2", "sub": "ABR 0/1", "t": "router", "x": 375, "y": 130 },
+          { "id": "R3", "label": "R3", "sub": "ABR 1/2", "t": "router", "x": 635, "y": 130 },
+          { "id": "PC1", "label": "PC1", "sub": "Area 2 用户", "t": "pc", "x": 635, "y": 215 }
+        ],
+        "links": [
+          ["R1", "R2", "Area 0"],
+          ["R2", "R3", "Area 1（中转）"],
+          ["R3", "PC1", ""]
+        ]
+      },
+      "plan": [
+        { "dev": "R1", "intf": "GE0/0/0", "ip": "10.0.12.1/24", "note": "Area 0" },
+        { "dev": "R2", "intf": "GE0/0/0", "ip": "10.0.12.2/24", "note": "Area 0 侧" },
+        { "dev": "R2", "intf": "GE0/0/1", "ip": "10.0.23.2/24", "note": "Area 1 侧" },
+        { "dev": "R3", "intf": "GE0/0/0", "ip": "10.0.23.3/24", "note": "Area 1 侧" },
+        { "dev": "R3", "intf": "GE0/0/1", "ip": "10.0.3.1/24", "note": "Area 2 网关" }
+      ],
+      "vars": {
+        "proc": { "label": "OSPF 进程号", "value": "1", "hint": "1–65535", "desc": "三台都配 1，方便对照。" },
+        "areaTrans": { "label": "中转区域号", "value": "1", "hint": "非 0", "desc": "虚连接要穿过的区域，两端都得在这块区域里有接口。" },
+        "areaEnd": { "label": "末端区域号", "value": "2", "hint": "非 0", "desc": "没有直连骨干的那个区域。" },
+        "rid2": { "label": "R2 Router ID", "value": "2.2.2.2", "hint": "点分十进制", "desc": "R1 配虚连接时要填 R2 的这个值。" },
+        "rid3": { "label": "R3 Router ID", "value": "3.3.3.3", "hint": "点分十进制", "desc": "R2 配虚连接时要填 R3 的这个值。" }
+      },
+      "steps": [
+        {
+          "title": "R1 / R2：先把 Area 0 建起来",
+          "note": "虚连接的两端必须在同一个中转区域里有接口，先把底层打通",
+          "code": "system-view\nsysname R1\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.1 255.255.255.0\n quit\nospf {{proc}} router-id 1.1.1.1\n area 0\n  network 10.0.12.0 255.255.255.0\n  quit\n quit"
+        },
+        {
+          "title": "R2：骨干 + 中转区域都挂上（ABR）",
+          "note": "R2 同时属于 Area 0 和 Area 1",
+          "code": "system-view\nsysname R2\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.2 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.23.2 255.255.255.0\n quit\nospf {{proc}} router-id {{rid2}}\n area 0\n  network 10.0.12.0 255.255.255.0\n  quit\n area {{areaTrans}}\n  network 10.0.23.0 255.255.255.0\n  quit\n quit"
+        },
+        {
+          "title": "R3：中转 + 末端区域（这里没有直连骨干）",
+          "note": "此时 Area 2 的路由进不了骨干，因为 R3 不是 ABR",
+          "code": "system-view\nsysname R3\ninterface GigabitEthernet 0/0/0\n ip address 10.0.23.3 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.3.1 255.255.255.0\n quit\nospf {{proc}} router-id {{rid3}}\n area {{areaTrans}}\n  network 10.0.23.0 255.255.255.0\n  quit\n area {{areaEnd}}\n  network 10.0.3.0 255.255.255.0\n  quit\n quit"
+        },
+        {
+          "title": "R2 / R3：双向拉虚连接",
+          "note": "两端都要配，只配一边永远起不来",
+          "code": "# R2 上指向 R3 的 Router ID\nsystem-view\nospf {{proc}}\n area {{areaTrans}}\n  vlink-peer {{rid3}}\n  quit\n quit\n\n# R3 上指向 R2 的 Router ID\nsystem-view\nospf {{proc}}\n area {{areaTrans}}\n  vlink-peer {{rid2}}\n  quit\n quit"
+        }
+      ],
+      "verify": [
+        { "cmd": "display ospf vlink", "hope": "State 是 Full，两边各有一条" },
+        { "cmd": "display ospf brief", "hope": "R3 上能看到 Area 0 的接口（逻辑接口 VLINK）" },
+        { "cmd": "display ip routing-table", "hope": "R1 上出现 10.0.3.0/24 的 OSPF 路由" }
+      ],
+      "pitfalls": [
+        "只在一端配 vlink-peer，另一端没配 —— 状态会一直停在 Down。",
+        "对端填的是接口地址而不是 Router ID，命令不报错但永远起不来。",
+        "中转区域本身没通（两端没有共同区域）时，虚连接无从建立。",
+        "虚连接只是救急，链路一断骨干又断；长期方案是补物理链路或重规划区域。"
+      ],
+      "docs": {
+        "secs": [
+          { "h": "虚连接的本质", "p": "在一条穿过中转区域的逻辑链路上建立 OSPF 邻居，让两个 ABR 在骨干区域里看起来是直连的。" },
+          { "h": "为什么两端必须都配", "p": "vlink-peer 是单向声明，两端各声明一次才形成双向邻居。" }
+        ],
+        "src": { "n": "华为官方 · S5700 配置指南-IP单播路由（OSPF）", "u": "https://support.huawei.com/enterprise/zh/doc/EDOC1100459458/c9060695" }
+      }
+    }
+  ],
+  "presets": [],
+  "flows": [
+    {
+      "id": "flow-ospf-stuck",
+      "title": "OSPF 邻居卡在中间状态",
+      "summary": "从 Down / Init / 2-Way / ExStart 四个状态反推原因。",
+      "root": "n1",
+      "nodes": {
+        "n1": { "kind": "q", "label": "display ospf peer 看到什么状态？", "note": "先确认卡在哪个阶段", "children": ["n2", "n3", "n4"] },
+        "n2": { "kind": "o", "label": "Down / Init", "body": "还在 Hello 阶段，报文没互通。", "children": ["n5"] },
+        "n3": { "kind": "o", "label": "2-Way", "body": "双向通了，但没选举 DR/BDR。", "children": ["n6"] },
+        "n4": { "kind": "o", "label": "ExStart / Exchange", "body": "开始交互 DD 报文，通常卡在 MTU。", "children": ["n7"] },
+        "n5": { "kind": "end", "label": "查 Hello 三件套", "body": "area 号、hello/dead 定时器、认证必须完全一致；再查两头是否在同一网段、是否被 ACL 拦了组播 224.0.0.5。", "snippet": "ospf-nssa" },
+        "n6": { "kind": "end", "label": "广播网络里属正常", "body": "广播网段里非 DR/BDR 之间就是 2-Way，属于正常现象；如果所有邻居都是 2-Way，查是不是所有接口都配了 ospf dr-priority 0。", "snippet": "ospf-vlink" },
+        "n7": { "kind": "end", "label": "查 MTU 和 MTU 校验", "body": "两端接口 MTU 不一致会导致 DD 报文丢弃。用 display interface 对比 MTU，或在一端加 ospf mtu-ignore 临时绕过（不推荐长期）。", "snippet": "ospf-nssa" }
+      }
+    }
+  ],
+  "cmd": {
+    "nssa": { "p": "在 OSPF 区域视图下把该区域设为 NSSA（Not-So-Stubby Area）：不收 Type 5 外部路由，但允许本区域内的外部路由以 Type 7 泛洪，由 ABR 转换成 Type 5 注入骨干。", "eg": "area 1\n nssa" },
+    "vlink-peer": { "p": "在 OSPF 区域视图下创建虚连接，参数是对端的 Router ID。两端都要配，且必须位于同一个中转区域。", "eg": "area 1\n vlink-peer 3.3.3.3" }
+  },
+  "keywords": ["nssa", "vlink-peer"]
+}

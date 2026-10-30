@@ -1,0 +1,74 @@
+{
+  "name": "code-atlas",
+  "productName": "CodeAtlas",
+  "version": "1.1.2",
+  "description": "CodeAtlas - 可自主配置的代码大全",
+  "main": "electron/main.js",
+  "author": "CodeAtlas",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64",
+    "dist:dir": "electron-builder --win --dir --x64",
+    "www": "node scripts/prepare-www.js",
+    "icons": "python scripts/make-icon.py",
+    "android:sync": "npm run www && cap sync android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
+    "shots": "python scripts/shot-regress.py"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "electron": "^37.10.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.codeatlas.app",
+    "productName": "CodeAtlas",
+    "copyright": "CodeAtlas",
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "index.html",
+      "assets/**/*",
+      "examples/**/*",
+      "build/icon.png",
+      "README.md",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "CodeAtlas-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "CodeAtlas-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodeAtlas",
+      "deleteAppDataOnUninstall": false
+    },
+    "compression": "maximum"
+  },
+  "dependencies": {
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/share": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.6"
+  }
+}

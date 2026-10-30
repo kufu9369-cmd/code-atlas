@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+dist/
+www/
+
+# 自检脚本要入库（README 里的 node _dev/check-*.js 得能跑），但它们的产物不要
+_dev/_shots/
+_dev/_*.js
+_dev/_ud_*/
+*.log
+
+# Capacitor 生成的 Android 工程里的构建缓存
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/.kotlin/
+
+# 系统垃圾
+Thumbs.db
+.DS_Store
+desktop.ini

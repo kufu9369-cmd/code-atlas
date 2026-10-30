@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090B10">
+<meta name="description" content="码典 CodeAtlas — 可配置的代码大全。固定部分照抄，自主部分点一下就能改。">
+<title>码典 CodeAtlas · 可配置的代码大全</title>
+<link rel="stylesheet" href="assets/styles.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('codeatlas.theme.v1');
+    if (t !== 'light' && t !== 'dark') {
+      t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', t === 'light' ? '#F4F6F9' : '#090B10');
+  } catch (e) {}
+})();
+/* 悬浮窗模式：桌面端用 index.html?hud=1 打开的那个窗口。
+   必须在首屏渲染前就定下来，否则会先闪一下不透明的底再变透明。 */
+(function () {
+  try {
+    if (/(^|[?&])hud=1(&|$)/.test(location.search)) {
+      document.documentElement.setAttribute('data-hud', '1');
+    }
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+
+<!-- 悬浮窗外壳。
+     普通窗口里 #hudShell 是 display:contents —— 不生成盒子，#app 的布局
+     跟没有这层包裹时一模一样；只有 ?hud=1（桌面端 Ctrl+Alt+X 叫出来的窗口）
+     才变成一个带圆角的透明卡片。 -->
+<div id="hudShell">
+  <div id="hudBar">
+    <span class="hud-dot"></span>
+    <span class="hud-title">码典</span>
+    <span class="hud-key">Ctrl+Alt+X</span>
+    <span class="hud-sp"></span>
+    <button class="hud-btn hud-btn-nx" data-hud="next" title="抓下一步：读剪贴板，告诉你下一句敲什么（Ctrl+Alt+Z）">下一步</button>
+    <button class="hud-btn" data-hud="size" title="切换小 / 中 / 大三档尺寸">尺寸</button>
+    <button class="hud-btn" data-hud="main" title="收起悬浮窗，回到主窗口">主窗</button>
+    <button class="hud-btn hud-btn-x" data-hud="hide" title="隐藏（Ctrl+Alt+X 唤回）">×</button>
+  </div>
+
+<div id="app">
+  <nav id="rail" aria-label="主导航"></nav>
+
+  <section id="listPane">
+    <header class="lp-head">
+      <div class="brand">
+        <span class="mark">码</span>
+        <span class="bt"><b>码典</b><i>CodeAtlas</i></span>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="11" cy="11" r="6.6"/><path d="M16 16l4 4"/>
+        </svg>
+        <input id="q" placeholder="全站搜索：命令 / 场景 / 标签（dis isis · getParameter · 清除浮动）" autocomplete="off" spellcheck="false" aria-label="全站搜索">
+        <kbd id="kbd">⌘K</kbd>
+      </div>
+      <!-- 专题内部的分类胶囊，由 app.js 的 renderCatTabs() 填充 -->
+      <div id="catTabs" class="cat-tabs" hidden></div>
+    </header>
+    <div id="listScroll" class="lp-body"></div>
+    <footer class="lp-foot" id="lpFoot"></footer>
+  </section>
+
+  <main id="mainPane">
+    <div id="mainScroll" class="mp-body"></div>
+  </main>
+</div>
+
+<!-- 「下一步」面板。
+     只在悬浮窗里出现（Ctrl+Alt+Z / 顶部「下一步」按钮），打开时 #app 整块隐藏，
+     所以这里能直接用卡片本身的背景，不用再叠一层 —— 叠了的话
+     用户选的「不透明度 72%」就白选了。
+     内容全由 assets/hudnext.js 渲染。 -->
+<div id="nextPane" hidden>
+  <div class="nx-bar">
+    <span class="nx-dot"></span>
+    <b>下一步</b>
+    <span class="nx-hint" id="nxHint">在 eNSP 里选中几行，按一次 Ctrl+Alt+Z 就行</span>
+    <button class="nx-x" data-nx="close" title="返回浏览（Esc）">×</button>
+  </div>
+  <div class="nx-in">
+    <textarea id="nxInput" rows="2" spellcheck="false"
+      placeholder="粘 eNSP 里刚敲的几行（带不带提示符都行）"></textarea>
+    <button class="nx-go" data-nx="grab" title="读剪贴板并匹配">抓</button>
+  </div>
+  <div class="nx-body" id="nxBody"></div>
+</div>
+</div><!-- /#hudShell -->
+
+<!-- 缩放握把：只在悬浮窗里显示。无边框窗口没有系统边框可拖，
+     这三个握把负责「拖右下角 / 右边 / 下边」改大小。 -->
+<div class="hud-grip" data-grip="e" aria-hidden="true"></div>
+<div class="hud-grip" data-grip="s" aria-hidden="true"></div>
+<div class="hud-grip" data-grip="se" aria-hidden="true"></div>
+
+<div class="scrim"></div>
+<aside id="docsPanel" aria-hidden="true" aria-label="官方解答"></aside>
+<div id="popover" role="dialog" aria-modal="false"></div>
+<div id="packDlg" class="pack-dlg" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/data.js"></script>
+<!-- 专题层：大图标入口 = 专题，分类降为专题内部的小胶囊 -->
+<script src="assets/topics.js"></script>
+<script src="assets/search.js"></script>
+<!-- eNSP 内置内容（按难度分片，99-merge.js 负责去重合并，必须在 packs.js 之前） -->
+<script src="assets/ensp/00-base.js"></script>
+<script src="assets/ensp/10-basic.js"></script>
+<script src="assets/ensp/20-adv.js"></script>
+<script src="assets/ensp/30-pro.js"></script>
+<script src="assets/ensp/40-labs.js"></script>
+<script src="assets/ensp/50-presets-flows.js"></script>
+<script src="assets/ensp/60-cmd.js"></script>
+<script src="assets/ensp/70-cmd-query.js"></script>
+<!-- 配置剧本：给「下一步」引擎用，必须在 99-merge 之前 -->
+<script src="assets/ensp/80-recipes.js"></script>
+<script src="assets/ensp/82-recipes-route.js"></script>
+<script src="assets/ensp/84-recipes-sec.js"></script>
+<script src="assets/ensp/99-merge.js"></script>
+<!-- JavaWeb 专题 -->
+<script src="assets/javaweb/00-base.js"></script>
+<script src="assets/javaweb/10-servlet.js"></script>
+<script src="assets/javaweb/20-jsp.js"></script>
+<script src="assets/javaweb/30-jdbc.js"></script>
+<script src="assets/javaweb/40-mvc.js"></script>
+<script src="assets/javaweb/50-deploy.js"></script>
+<script src="assets/javaweb/60-labs.js"></script>
+<script src="assets/javaweb/70-presets-flows.js"></script>
+<script src="assets/javaweb/80-cmd.js"></script>
+<script src="assets/javaweb/99-merge.js"></script>
+<!-- Web 前端（旧版）专题 -->
+<script src="assets/weblegacy/00-base.js"></script>
+<script src="assets/weblegacy/10-htmlcss.js"></script>
+<script src="assets/weblegacy/20-js.js"></script>
+<script src="assets/weblegacy/30-jquery.js"></script>
+<script src="assets/weblegacy/40-compat.js"></script>
+<script src="assets/weblegacy/50-labs.js"></script>
+<script src="assets/weblegacy/60-presets-flows.js"></script>
+<script src="assets/weblegacy/70-cmd.js"></script>
+<script src="assets/weblegacy/99-merge.js"></script>
+<script src="assets/packs.js"></script>
+<script src="assets/native.js"></script>
+<!-- 「下一步」匹配引擎：要等所有内容合并完才建索引，所以放在 packs.js 之后 -->
+<script src="assets/nextstep.js"></script>
+<script src="assets/app.js"></script>
+<!-- 悬浮窗的窗口交互（拖动条 / 缩放握把 / 尺寸切换）。网页版和安卓版会整段跳过。 -->
+<script src="assets/hud.js"></script>
+<script src="assets/hudnext.js"></script>
+</body>
+</html>
