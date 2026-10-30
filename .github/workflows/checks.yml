@@ -1,0 +1,40 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  content:
+    name: 内容与引擎自检
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 这些脚本是纯 Node、不依赖 Electron / 浏览器，也不需要 npm install
+      - name: 全站内容一致性（id 唯一、变量闭合、ref 有效、专题归属、幂等）
+        run: node _dev/check-all.js
+
+      - name: eNSP 分片（id 冲突、变量未定义、拓扑越界、预设 ref、工作流 end）
+        run: node _dev/check-ensp.js
+
+      - name: 配置剧本（全角符号、视图链、who 连续性）
+        run: node _dev/check-recipes.js
+
+      - name: 下一步引擎（视图识别、回显清洗、41 条主线批量回推）
+        run: node _dev/check-nextstep.js
+
+      - name: 搜索（25 个查询 + 首条结果断言）
+        run: node _dev/check-search.js
+
+      - name: 知识包导入全链路（校验 → 查重 → 写入 → 合并 → 可见）
+        run: node _dev/check-import.js
+
+      - name: 命令词典覆盖率（信息性，列出代码里用到但词典没收的词）
+        run: node _dev/check-cmd-coverage.js
