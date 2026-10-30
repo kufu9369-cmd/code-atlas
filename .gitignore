@@ -4,9 +4,10 @@ dist/
 www/
 
 # 自检脚本要入库（README 里的 node _dev/check-*.js 得能跑），但它们的产物不要
+# `_` 开头的都是临时探针 / 截图 / 发布脚本的中间文件
 _dev/_shots/
-_dev/_*.js
-_dev/_ud_*/
+_dev/_*
+_dev/*.log
 *.log
 
 # Capacitor 生成的 Android 工程里的构建缓存
