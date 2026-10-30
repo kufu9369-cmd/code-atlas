@@ -254,6 +254,8 @@
     git: svg('<rect x="2.8" y="4.2" width="18.4" height="15.6" rx="2.6"/><circle cx="8" cy="12" r="1.7"/><circle cx="16.4" cy="8.4" r="1.5"/><circle cx="16.4" cy="15.6" r="1.5"/><path d="M9.7 12h1.9a2 2 0 0 0 2-2v-.4a1 1 0 0 1 1-1h.3M9.7 12h1.9a2 2 0 0 1 2 2v.4a1 1 0 0 0 1 1h.3"/>'),
     search: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.6"/><path d="M16 16l4 4"/></svg>',
     copy: svg('<rect x="8.6" y="8.6" width="11" height="11" rx="2"/><path d="M15.4 5.4H6.6a2 2 0 0 0-2 2v8.8"/>'),
+    paste: svg('<rect x="8.2" y="3.2" width="7.6" height="3.8" rx="1.2"/><path d="M6.4 5.2H5a1.9 1.9 0 0 0-1.9 1.9v12a1.9 1.9 0 0 0 1.9 1.9h14a1.9 1.9 0 0 0 1.9-1.9v-12A1.9 1.9 0 0 0 19 5.2h-1.4"/>'),
+    trash: svg('<path d="M4.6 6.6h14.8"/><path d="M9.6 6.6V4.9a1.3 1.3 0 0 1 1.3-1.3h2.2a1.3 1.3 0 0 1 1.3 1.3v1.7"/><path d="M6.6 6.6l.85 12a1.8 1.8 0 0 0 1.8 1.7h5.5a1.8 1.8 0 0 0 1.8-1.7l.85-12"/>'),
     book: svg('<path d="M4 5.4A2 2 0 0 1 6 3.4h4.6A2.4 2.4 0 0 1 13 5.8v14a2 2 0 0 0-2-2H6a2 2 0 0 1-2-2V5.4z"/><path d="M20 5.4a2 2 0 0 0-2-2h-2.6A2.4 2.4 0 0 0 13 5.8v14a2 2 0 0 1 2-2h3a2 2 0 0 0 2-2V5.4z"/>'),
     x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
     back: svg('<path d="M15 5l-7 7 7 7"/>'),
@@ -950,11 +952,70 @@
     return bits.join(' · ') || '空包';
   }
 
+  /* 输入框右上角的「N 字 · N 行」—— 粘完一眼确认进没进来 */
+  function packCountUpd() {
+    const ta = $('#packText'), c = $('#packCount');
+    if (!ta || !c) return;
+    const n = ta.value.length;
+    c.textContent = n ? (n.toLocaleString('en-US') + ' 字 · ' + ta.value.split('\n').length + ' 行') : '';
+  }
+
+  /* 读剪贴板：桌面版走主进程（最可靠），网页版走 Clipboard API；
+     安卓 WebView 两者都可能没有 —— 那就把光标放回框里让人自己 Ctrl+V，不报错。 */
+  async function packPaste() {
+    const ta = $('#packText');
+    if (!ta) return;
+    let txt = '';
+    try {
+      if (window.DESKTOP && window.DESKTOP.clip && window.DESKTOP.clip.read) {
+        txt = await window.DESKTOP.clip.read();
+      } else if (navigator.clipboard && navigator.clipboard.readText) {
+        txt = await navigator.clipboard.readText();
+      }
+    } catch (e) { txt = ''; }
+    txt = String(txt || '');
+    if (!txt.trim()) {
+      ta.focus();
+      toast('读不到剪贴板，直接按 Ctrl+V 粘进来');
+      return;
+    }
+    /* 粘贴 = 换掉而不是追加：一次导入就是一个包，追加多半是误操作 */
+    const had = ta.value.trim().length > 0;
+    ta.value = txt;
+    packDraft = txt;
+    packChecked = null;
+    const r = $('#packReport');
+    if (r) r.innerHTML = '';
+    packCountUpd();
+    ta.scrollTop = 0;
+    toast((had ? '已用剪贴板内容替换 · ' : '已粘贴 ') + txt.split('\n').length + ' 行');
+  }
+
+  function packClear() {
+    const ta = $('#packText');
+    if (!ta) return;
+    if (!ta.value) { ta.focus(); return; }
+    ta.value = '';
+    packDraft = '';
+    packChecked = null;
+    const r = $('#packReport');
+    if (r) r.innerHTML = '';
+    packCountUpd();
+    ta.focus();
+    toast('已清空');
+  }
+
   function packBody() {
     const P = window.PACKS;
     if (packTab === 'import') {
       return '<p class="pd-hint">把 JSON 粘进下面 —— 直接粘 AI 的整段回答也行，带不带 Markdown 代码块都能识别；也可以选一个 <code>.json</code> 文件。'
         + '不确定格式，就先点「复制给 AI 的格式说明」，丢给任意 AI 让它按格式产出。</p>'
+        + '<div class="pd-tools">'
+        + '<button class="pd-mini" data-act="packpaste" title="从剪贴板读入（会替换框里现有内容）">' + ICON.paste + '粘贴</button>'
+        + '<button class="pd-mini" data-act="packclear" title="清空输入框">' + ICON.trash + '清空</button>'
+        + '<span class="grow"></span>'
+        + '<span class="pd-count" id="packCount"></span>'
+        + '</div>'
         + '<textarea id="packText" spellcheck="false" placeholder=\'{ "id": "ospf-adv", "name": "OSPF 进阶", "categories": [ ... ], "labs": [ ... ] }\'>'
         + esc(packDraft) + '</textarea>'
         + '<div class="pd-row">'
@@ -1013,7 +1074,9 @@
         packChecked = null;
         const r = $('#packReport');
         if (r) r.innerHTML = '';
+        packCountUpd();
       });
+      packCountUpd();
     }
     const fi = $('#packFile');
     if (fi) {
@@ -1500,6 +1563,8 @@
       if (a === 'packs') { openPacks(); return; }
       if (a === 'packclose') { closePacks(); return; }
       if (a === 'packcheck') { runPackCheck(); return; }
+      if (a === 'packpaste') { packPaste(); return; }
+      if (a === 'packclear') { packClear(); return; }
       if (a === 'packinstall') { doPackInstall(); return; }
       if (a === 'packdlall') { packDownload(); return; }
       if (a === 'packcopyall') {

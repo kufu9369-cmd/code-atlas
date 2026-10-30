@@ -1158,6 +1158,22 @@ body.docs-open .scrim { display: block; }
 .pd-body { padding: 14px 20px 20px; overflow-y: auto; overscroll-behavior: contain; }
 .pd-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.7; color: var(--tx-3); }
 .pd-hint code { font-family: var(--mono); font-size: 11px; color: var(--amber); }
+
+/* 输入框上方的小工具条：粘贴 / 清空 / 字数 */
+.pd-tools { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.pd-tools .grow { flex: 1; }
+.pd-mini {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--line-2); background: transparent;
+  color: var(--tx-2); font-size: 12px; line-height: 1; cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.pd-mini:hover { border-color: var(--line-3); color: var(--tx); background: var(--wash-1); }
+.pd-mini:active { transform: translateY(1px); }
+.pd-mini svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.pd-count { font-size: 11.5px; color: var(--tx-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 #packText {
   width: 100%; min-height: 190px; max-height: 40vh; padding: 12px; resize: vertical;
   background: var(--code-bg); color: var(--code-tx);

@@ -16,7 +16,9 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const EXE = path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
+/* 默认跑开发目录的源码；设了 CODEATLAS_EXE 就跑打包成品（验证 asar 里是不是新代码） */
+const PKG = process.env.CODEATLAS_EXE ? path.resolve(ROOT, process.env.CODEATLAS_EXE) : '';
+const EXE = PKG || path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
 const OUT = path.join(ROOT, '_dev', '_shots');
 
 /* 示例包原文（模拟用户"打开文件复制全文"） */
@@ -111,7 +113,34 @@ const CASES = [
     + 'document.getElementById("packText").value=' + JSON.stringify(JSON.stringify(NEWTOPIC)) + ';'
     + 'document.querySelector(\'[data-act="packcheck"]\').click();'
     + 'var btn=document.querySelector(\'[data-act="packinstall"]\');'
-    + 'if(btn){btn.click();}else{document.title="NO-BUTTON";}1']
+    + 'if(btn){btn.click();}else{document.title="NO-BUTTON";}1'],
+
+  /* 9. 工具条：粘贴 / 清空 / 字数（空框时的样子） */
+  ['imp_tools', 'CodeAtlas.openPacks("import");1'],
+
+  /* 10. 粘贴按钮：真往系统剪贴板写一段，再点粘贴，断言内容进到了框里。
+        桌面版走主进程桥（window.DESKTOP.clip），这是用户实际用的那条路。 */
+  ['imp_paste',
+    'CodeAtlas.openPacks("import");'
+    + 'window.DESKTOP.clip.write(' + JSON.stringify('{"id":"paste-demo","name":"从剪贴板粘进来的包"}') + ').then(function(){'
+    + 'document.querySelector(\'[data-act="packpaste"]\').click();'
+    + 'return new Promise(function(r){ setTimeout(function(){'
+    + 'var t=document.getElementById("packText");'
+    + 'var c=document.getElementById("packCount");'
+    + 'r("PASTE len="+t.value.length+" has="+(t.value.indexOf("paste-demo")>=0)+" count="+JSON.stringify(c.textContent));'
+    + '},900); }); });'],
+
+  /* 11. 清空：塞 30 行进去，点一下清空，断言值和字数都归零 */
+  ['imp_clear',
+    'CodeAtlas.openPacks("import");'
+    + 'var t=document.getElementById("packText");'
+    + 't.value=new Array(30).fill("这一行是占位内容，用来验证一键清空").join("\\n");'
+    + 't.dispatchEvent(new Event("input"));'
+    + 'var before=t.value.length;'
+    + 'var cntBefore=document.getElementById("packCount").textContent;'
+    + 'document.querySelector(\'[data-act="packclear"]\').click();'
+    + '("CLEAR before="+before+" after="+t.value.length+" cntBefore="+JSON.stringify(cntBefore)'
+    + '+" cntAfter="+JSON.stringify(document.getElementById("packCount").textContent))']
 ];
 
 function run(name, js, ud) {

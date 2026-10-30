@@ -364,6 +364,80 @@ console.log('\n=== 10. 导入的实验归到哪个专题 ===');
   } else ok('跟随分类包能导入', false, r.step);
 }
 
+/* ---------- docs.src.u 的容错 ----------
+   用户报过：导入一直停在「有 1 处要改 · docs.src.u 必须是 https 链接」，
+   改完还是过不去。根因是前导空格、大写协议、中文冒号这些都被当成错，
+   而提示既不显示实际值、也不说是哪一条。 */
+console.log('\n=== docs.src.u 容错 ===');
+
+function urlPack(u) {
+  return JSON.stringify({
+    id: 'test-url', name: '链接容错包',
+    categories: [{ id: 'urltest', name: 'URL 测试', items: [
+      { id: 'test-url-s1', title: '链接测试片段', desc: 'D', code: 'display version',
+        docs: { src: { t: 'Huawei', u: u } } }] }]
+  });
+}
+
+[
+  ['https://support.huawei.com/x', 'https://support.huawei.com/x', false, '规范写法原样保留'],
+  ['HTTPS://support.huawei.com/x', 'https://support.huawei.com/x', false, '大写协议转小写'],
+  [' https://support.huawei.com/x', 'https://support.huawei.com/x', false, '前导空格去掉'],
+  ['https://support.huawei.com/x ', 'https://support.huawei.com/x', false, '尾随空格去掉'],
+  ['https：//support.huawei.com/x', 'https://support.huawei.com/x', false, '中文冒号修正'],
+  ['//support.huawei.com/x', 'https://support.huawei.com/x', false, '协议相对补 https:'],
+  ['support.huawei.com/x', 'https://support.huawei.com/x', false, '漏写协议自动补'],
+  ['https:\\support.huawei.com\\x', 'https://support.huawei.com/x', false, '反斜杠修正'],
+  ['http://support.huawei.com/x', 'http://support.huawei.com/x', false, 'http 保留原值，不瞎升级'],
+  ['   ', undefined, false, '纯空格当作没写'],
+  ['', undefined, false, '空字符串当作没写'],
+  ['docs/README.md', 'docs/README.md', true, '确实不像链接才拦']
+].forEach(([input, expect, block, label]) => {
+  const r = P.normalize(urlPack(input));
+  const err = r.errors.filter(e => e.indexOf('docs.src.u') >= 0);
+  const item = r.pack && r.pack.cats[0] && r.pack.cats[0].items[0];
+  const got = item && item.docs && item.docs.src ? item.docs.src.u : undefined;
+  ok(label + (block ? '（拦下）' : '（放行）'),
+    (block ? err.length > 0 : err.length === 0) && got === expect,
+    '拦=' + (err.length > 0) + ' 值=' + JSON.stringify(got) + ' 期望=' + JSON.stringify(expect));
+});
+
+{
+  const r = P.normalize(urlPack(' docs/README.md'));
+  const all = r.errors.join('\n');
+  ok('拦下时报错带片段标题', all.indexOf('链接测试片段') >= 0, all.slice(0, 120));
+  ok('拦下时报错带实际值', all.indexOf('docs/README.md') >= 0, all.slice(0, 120));
+}
+
+{
+  const r = P.normalize(urlPack('HTTPS://x.com/a'));
+  const all = r.warnings.join('\n');
+  ok('自动修正时留一条警告说明改了什么',
+    all.indexOf('已自动修正') >= 0 && all.indexOf('https://x.com/a') >= 0, all.slice(0, 140));
+}
+
+{
+  const r = P.normalize(urlPack('http://x.com/a'));
+  const all = r.warnings.join('\n');
+  ok('http 明确提示「不是 https」而不是闷掉',
+    all.indexOf('http 不是 https') >= 0, all.slice(0, 140));
+}
+
+{
+  /* docs 写成 { src: "https://..." } 这种 AI 常见写法也要能用 */
+  const raw = JSON.stringify({
+    id: 'test-url2', name: '怪写法包',
+    categories: [{ id: 'urltest2', name: 'URL2', items: [
+      { id: 'test-url2-s1', title: '怪写法', desc: 'D', code: 'ls',
+        docs: { src: 'https://x.com/a' } }] }]
+  });
+  const r = P.normalize(raw);
+  const item = r.pack && r.pack.cats[0] && r.pack.cats[0].items[0];
+  ok('docs.src 写成字符串也能认出链接',
+    !r.errors.length && item && item.docs.src.u === 'https://x.com/a',
+    r.errors.join(' / ') || JSON.stringify(item && item.docs));
+}
+
 /* ---------- 汇总 ---------- */
 console.log('\n=== 汇总 ===');
 console.log('通过 ' + pass + ' / 失败 ' + fail);

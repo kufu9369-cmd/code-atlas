@@ -292,31 +292,83 @@
   }
 
   /* ---------- 单条校验 ---------- */
+
+  /* 报错里截一段实际值：只写「第 0 条的某个字段不对」，用户还得自己去数第 0 条是谁 */
+  function brief(s, n) {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ');
+    n = n || 48;
+    return s.length > n ? s.slice(0, n) + '…' : s;
+  }
+
+  /* ---------- docs.src.u 的容错 ----------
+     从 AI 那边复制来的链接，脏数据基本就这几种，都修掉而不是拦住：
+       前导 / 尾随空格、全角冒号（https：//）、反斜杠、大写协议（HTTPS://）
+     漏写协议的能唯一推断出 https:// 吗？分三种：
+       //host/x   → 补 https:
+       host/x     → 补 https://
+       http://... → **不补**，故意保留原样：有的站只有 http，瞎升级会变死链，只提醒
+     最后只剩「完全不像链接」才算错误。 */
+  function fixUrl(u) {
+    var s = String(u == null ? '' : u).trim();
+    if (!s) return '';
+    s = s.replace(/：/g, ':').replace(/／/g, '/').replace(/\\/g, '/');
+    s = s.replace(/^(https?)\s*:\s*\/*/i, function (_, p) { return p.toLowerCase() + '://'; });
+    if (/^\/\//.test(s)) return 'https:' + s;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^[\w-]+(\.[\w-]+)+([/?#]|$)/.test(s)) return 'https://' + s;
+    return s;
+  }
+
+  function checkDocsUrl(it, at, res) {
+    var src = it.docs && it.docs.src;
+    if (src == null) return;
+    /* docs 写成 { src: "https://..." } 也很常见，先掰成规范结构再判断 */
+    if (typeof src !== 'object') { it.docs.src = { u: String(src) }; src = it.docs.src; }
+    var raw = src.u;
+    if (raw == null) return;
+    var s = String(raw).trim();
+    if (!s) { delete src.u; return; }             // 写了但是空的：当没写，不拦
+    var fixed = fixUrl(s);
+    if (fixed !== String(raw)) {
+      src.u = fixed;
+      res.warnings.push(at + ' 的 docs.src.u 已自动修正：「' + brief(raw) + '」→「' + brief(fixed) + '」');
+    }
+    if (/^https:\/\//i.test(fixed)) return;
+    if (/^http:\/\//i.test(fixed)) {
+      res.warnings.push(at + ' 的 docs.src.u 是 http 不是 https（「' + brief(fixed) + '」），点开会有安全提示，建议换 https');
+      return;
+    }
+    res.errors.push(at + ' 的 docs.src.u 不是可用链接（现在是「' + brief(fixed) + '」），'
+      + '要写成 https:// 开头的完整地址');
+  }
+
   function checkSnippet(it, path, res) {
+    /* 带上标题：path 只有 categories[0].items[0]，用户没法知道那是哪一条 */
+    var at = path + (it.title ? '（' + brief(it.title, 18) + '）' : '');
     if (!it.id) res.errors.push(path + ' 缺少 id');
     if (!it.title) res.errors.push(path + ' 缺少 title');
-    if (!it.code) res.errors.push(path + ' 缺少 code');
-    if (!it.desc) res.warnings.push(path + ' 没有 desc（列表里会显得空）');
+    if (!it.code) res.errors.push(at + ' 缺少 code');
+    if (!it.desc) res.warnings.push(at + ' 没有 desc（列表里会显得空）');
     var refs = String(it.code).match(/\{\{[A-Za-z0-9_]+\}\}/g) || [];
     refs.forEach(function (r) {
       var n = r.slice(2, -2);
-      if (!(n in it.vars)) res.errors.push(path + ' 代码用了 {{' + n + '}} 但 vars 里没定义');
+      if (!(n in it.vars)) res.errors.push(at + ' 代码用了 {{' + n + '}} 但 vars 里没定义');
     });
     Object.keys(it.vars).forEach(function (k) {
       if (!it.vars[k] || typeof it.vars[k] !== 'object') it.vars[k] = {};
       var v = it.vars[k];
-      if (v.value === undefined || v.value === null || v.value === '') res.warnings.push(path + ' 变量 ' + k + ' 没有默认值');
-      if (!v.desc) res.warnings.push(path + ' 变量 ' + k + ' 没有 desc');
+      if (v.value === undefined || v.value === null || v.value === '') res.warnings.push(at + ' 变量 ' + k + ' 没有默认值');
+      if (!v.desc) res.warnings.push(at + ' 变量 ' + k + ' 没有 desc');
       if (!v.label) it.vars[k].label = k;
     });
-    var u = it.docs && it.docs.src && it.docs.src.u;
-    if (u && !/^https:\/\//.test(u)) res.errors.push(path + ' 的 docs.src.u 必须是 https 链接');
+    checkDocsUrl(it, at, res);
   }
 
   function checkLab(l, path, res) {
+    var at = path + (l.title ? '（' + brief(l.title, 18) + '）' : '');
     if (!l.id) res.errors.push(path + ' 缺少 id');
     if (!l.title) res.errors.push(path + ' 缺少 title');
-    if (!l.goal) res.warnings.push(path + ' 没有 goal（列表副标题会空）');
+    if (!l.goal) res.warnings.push(at + ' 没有 goal（列表副标题会空）');
     if (!l.steps.length) res.errors.push(path + ' 没有任何步骤');
     l.steps.forEach(function (s, i) {
       if (!s.title) res.warnings.push(path + '.steps[' + i + '] 没有 title');
@@ -342,16 +394,19 @@
         if (!Array.isArray(k) || !ids[k[0]] || !ids[k[1]]) res.errors.push(path + '.topo.links[' + i + '] 指向了不存在的节点');
       });
     }
+    checkDocsUrl(l, at, res);
   }
 
   function checkPreset(p, path, res, snipIds) {
+    var at = path + (p.title ? '（' + brief(p.title, 18) + '）' : '');
     if (!p.id) res.errors.push(path + ' 缺少 id');
     if (!p.title) res.errors.push(path + ' 缺少 title');
-    if (!p.steps.length) res.errors.push(path + ' 没有任何步骤');
+    if (!p.steps.length) res.errors.push(at + ' 没有任何步骤');
     p.steps.forEach(function (s, i) {
-      if (!s.ref) res.errors.push(path + '.steps[' + i + '] 缺少 ref（指向哪个片段）');
-      else if (!snipIds[s.ref]) res.errors.push(path + '.steps[' + i + '] 的 ref "' + s.ref + '" 找不到对应片段');
+      if (!s.ref) res.errors.push(at + '.steps[' + i + '] 缺少 ref（指向哪个片段）');
+      else if (!snipIds[s.ref]) res.errors.push(at + '.steps[' + i + '] 的 ref "' + s.ref + '" 找不到对应片段');
     });
+    checkDocsUrl(p, at, res);
   }
 
   function checkFlow(f, path, res) {
