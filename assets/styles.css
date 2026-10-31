@@ -69,6 +69,23 @@
   --btn-a:     #B9C2FF;
   --btn-b:     #8B99FF;
 
+  /* 皮肤包新增的可调项 ------------------------------------------------
+     这几项以前写死在规则里，换肤时就会露出别的皮肤的颜色：
+     --accent-ink  主色底上的字（seg-b.on / 徽标）
+     --iris-soft   主色淡底（关键词 hover）
+     --glow-1/2    body 两团光晕，换成皮肤自己的色相
+     --dots-1/2/3  代码卡左上三个点
+     --hud-rgb     悬浮窗卡片底色（必须与 --bg 同一颜色，见下方说明） */
+  --accent-ink: #FFFFFF;
+  --iris-soft:  rgba(124,140,255,.15);
+  --glow-1:     rgba(124,140,255,.10);
+  --glow-2:     rgba(255,180,84,.055);
+  --dots-1:     #3B2630;
+  --dots-2:     #3B3626;
+  --dots-3:     #22342C;
+  --hud-rgb:    9, 11, 16;
+  color-scheme: dark;
+
   --r-sm: 8px;
   --r:    12px;
   --r-lg: 16px;
@@ -100,8 +117,8 @@ html, body {
 body {
   overflow: hidden;
   background-image:
-    radial-gradient(720px 420px at 12% -8%, rgba(124,140,255,.10), transparent 62%),
-    radial-gradient(560px 360px at 92% 4%, rgba(255,180,84,.055), transparent 60%);
+    radial-gradient(720px 420px at 12% -8%, var(--glow-1), transparent 62%),
+    radial-gradient(560px 360px at 92% 4%, var(--glow-2), transparent 60%);
   background-attachment: fixed;
 }
 
@@ -511,7 +528,7 @@ p.lede {
 }
 .seg-b:hover { color: var(--tx); background: var(--wash-2); }
 .seg-b.on {
-  color: #fff; background: var(--iris-d);
+  color: var(--accent-ink); background: var(--iris-d);
   box-shadow: 0 0 0 1px rgba(124,140,255,.4) inset;
 }
 
@@ -552,10 +569,10 @@ p.lede {
   border-bottom: 1px solid var(--code-line);
 }
 .dots { display: flex; gap: 5px; }
-.dots i { width: 8px; height: 8px; border-radius: 50%; background: #2A3346; }
-.dots i:nth-child(1) { background: #3B2630; }
-.dots i:nth-child(2) { background: #3B3626; }
-.dots i:nth-child(3) { background: #22342C; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.dots i:nth-child(1) { background: var(--dots-1); }
+.dots i:nth-child(2) { background: var(--dots-2); }
+.dots i:nth-child(3) { background: var(--dots-3); }
 .code-h .fname {
   font-family: var(--mono); font-size: 11px; color: var(--tx-3);
   letter-spacing: .02em;
@@ -597,7 +614,7 @@ pre.code code { font: inherit; }
   border-bottom: 1px dashed rgba(147,166,255,.42);
   transition: background .13s, color .13s;
 }
-.kw-click:hover { color: #C3CDFF; background: rgba(124,140,255,.15); border-radius: 3px; }
+.kw-click:hover { color: var(--tx-hi); background: var(--iris-soft); border-radius: 3px; }
 
 /* ---------- 自主配置区：全站唯一的琥珀色 ---------- */
 .var {
@@ -851,7 +868,7 @@ svg.topo { display: block; width: 100%; height: auto; }
 .pit-list li::before {
   content: '!'; position: absolute; left: 12px; top: 11px;
   width: 15px; height: 15px; display: grid; place-items: center;
-  border-radius: 50%; background: var(--rose); color: #2A0C14;
+  border-radius: 50%; background: var(--rose); color: var(--btn-ink);
   font-family: var(--mono); font-size: 10px; font-weight: 800;
 }
 
@@ -939,7 +956,7 @@ svg.topo { display: block; width: 100%; height: auto; }
   width: var(--docs-w); max-width: 100%;
   background: var(--flow-bg);
   border-left: 1px solid var(--line-2);
-  box-shadow: -30px 0 70px -40px #000;
+  box-shadow: -30px 0 70px -40px var(--shadow);
   transform: translateX(102%);
   transition: transform .3s var(--ease);
   z-index: 80;
@@ -1025,7 +1042,7 @@ body.docs-open #docsPanel { transform: none; }
   margin-top: 12px; height: 32px; padding: 0 13px;
   border-radius: 9px; font-size: 12.5px;
   color: var(--btn-ink); font-weight: 600;
-  background: linear-gradient(180deg, #B9C2FF, #8B99FF);
+  background: linear-gradient(180deg, var(--btn-a), var(--btn-b));
 }
 
 body.docs-open .scrim {
@@ -1249,7 +1266,7 @@ body.docs-open .scrim { display: block; }
   padding: 9px 16px; border-radius: 10px;
   background: var(--panel-3); border: 1px solid var(--line-3);
   color: var(--tx); font-size: 12.5px;
-  box-shadow: 0 20px 40px -18px #000;
+  box-shadow: 0 20px 40px -18px var(--shadow);
   opacity: 0; pointer-events: none;
   transition: .22s var(--ease);
   z-index: 200; white-space: nowrap;
@@ -1420,11 +1437,23 @@ body.docs-open .scrim { display: block; }
 }
 
 /* ============================================================
-   浅色主题
-   只覆盖表面、文字、代码高亮与叠加层；
-   半透明的琥珀/靛蓝底保持原色，在浅底上反而更柔和。
+   皮肤包（v1.1.4）
+   ------------------------------------------------------------
+   一套皮肤 = 一个 html[data-skin="xxx"] 块，把上面 :root 里的颜色全量覆盖。
+   默认的深空（midnight）就是 :root 本身，不写选择器 —— 老用户升级上来无感。
+
+   新增一套皮肤的规矩：
+   1. 必须把 --bg / --panel* / --tx* / --iris* / --amber* / --code* / --wash*
+      / --btn-* / --glow-* / --dots-* 全部写全，缺哪个就会露出上一套的颜色。
+   2. **--hud-rgb 必须与 --bg 完全一致**（写 "R, G, B" 三段）。
+      悬浮窗卡片底色是 rgba(var(--hud-rgb), --hud-a)，写错了卡片就会
+      带一层不属于这套皮肤的色，在透明窗口里尤其明显。
+      `node _dev/check-skins.js` 会逐套比对，别靠眼看。
+   3. 浅色皮肤另需 --accent-ink 用主色本身（深色底上才用白）。
    ============================================================ */
-html[data-theme="light"] {
+
+/* ----- 日间 daylight（原浅色主题） ----- */
+html[data-skin="daylight"] {
   --bg:        #F4F6F9;
   --bg-2:      #EDF0F4;
   --panel:     #FFFFFF;
@@ -1483,27 +1512,586 @@ html[data-theme="light"] {
   --btn-ink:   #FFFFFF;
   --btn-a:     #5A6AE0;
   --btn-b:     #3F4FC4;
+
+  --accent-ink: #4453CC;
+  --iris-soft:  rgba(68,83,204,.13);
+  --glow-1:     rgba(68,83,204,.08);
+  --glow-2:     rgba(156,90,6,.05);
+  --dots-1:     #E8CFD4;
+  --dots-2:     #E8DEBF;
+  --dots-3:     #D2E5D6;
+  --hud-rgb:    244, 246, 249;
+  color-scheme: light;
 }
 
-html[data-theme="light"] body {
-  background-image:
-    radial-gradient(720px 420px at 12% -8%, rgba(68,83,204,.08), transparent 62%),
-    radial-gradient(560px 360px at 92% 4%, rgba(156,90,6,.05), transparent 60%);
+/* ----- 极夜 void：纯黑 OLED，主色退成冷白，只剩结构线 ----- */
+html[data-skin="void"] {
+  --bg:        #000000;
+  --bg-2:      #060708;
+  --panel:     #0A0B0D;
+  --panel-2:   #0E1013;
+  --panel-3:   #14171B;
+  --line:      #181B20;
+  --line-2:    #24282F;
+  --line-3:    #333842;
+
+  --tx:        #ECEEF2;
+  --tx-2:      #98A0AC;
+  --tx-3:      #616874;
+
+  --iris:      #C3CCD9;
+  --iris-d:    #1D2229;
+  --amber:     #D6A263;
+  --amber-d:   #241C11;
+  --mint:      #6FCBA8;
+  --mint-d:    #0D221B;
+  --rose:      #E0708A;
+  --rose-d:    #260F16;
+  --sky:       #6FA9D6;
+
+  --code-bg:   #030405;
+  --code-line: #14171B;
+  --code-head: #08090B;
+  --flow-bg:   #050607;
+  --pop-bg:    #0E1013;
+  --list-bg:   rgba(6,7,8,.55);
+  --list-bg-solid: rgba(6,7,8,.95);
+
+  --code-tx:   #B9C1CD;
+  --code-cl:   #E4E8EE;
+  --code-cm:   #59606B;
+  --hl-kw:     #9FB0C6;
+  --hl-st:     #86BE8B;
+  --hl-nu:     #D3AC66;
+  --hl-ip:     #74B0CC;
+
+  --amber-tx:  #E5BE8B;
+  --amber-tx2: #EFCEA2;
+  --amber-tx3: #C9AC84;
+  --amber-bg:  #1C1610;
+  --amber-line: rgba(214,162,99,.40);
+
+  --tx-hi:     #F7F9FC;
+  --wash-1:    rgba(255,255,255,.030);
+  --wash-2:    rgba(255,255,255,.045);
+  --wash-3:    rgba(255,255,255,.065);
+  --scrim:     rgba(0,0,0,.62);
+  --shadow:    #000;
+  --rail-a:    rgba(10,11,13,.92);
+  --rail-b:    rgba(0,0,0,.92);
+  --logo-a:    #2A3038;
+  --logo-b:    #14181D;
+  --btn-ink:   #04060A;
+  --btn-a:     #DCE3EC;
+  --btn-b:     #B6C0CD;
+
+  --accent-ink: #EAF0F7;
+  --iris-soft:  rgba(195,204,217,.14);
+  --glow-1:     rgba(120,140,170,.07);
+  --glow-2:     rgba(214,162,99,.04);
+  --dots-1:     #2A2026;
+  --dots-2:     #2A2820;
+  --dots-3:     #1E2A25;
+  --hud-rgb:    0, 0, 0;
+  color-scheme: dark;
 }
+
+/* ----- 极光 nord：冷灰蓝，参考 Nord 调色板 ----- */
+html[data-skin="nord"] {
+  --bg:        #242933;
+  --bg-2:      #2B313C;
+  --panel:     #2E3440;
+  --panel-2:   #353C49;
+  --panel-3:   #3B4252;
+  --line:      #3B4252;
+  --line-2:    #4A5468;
+  --line-3:    #5A6478;
+
+  --tx:        #ECEFF4;
+  --tx-2:      #B6C0CF;
+  --tx-3:      #7F8A9C;
+
+  --iris:      #88C0D0;
+  --iris-d:    #2A3D46;
+  --amber:     #EBCB8B;
+  --amber-d:   #38301F;
+  --mint:      #A3BE8C;
+  --mint-d:    #24301F;
+  --rose:      #BF616A;
+  --rose-d:    #331F22;
+  --sky:       #81A1C1;
+
+  --code-bg:   #272C36;
+  --code-line: #3B4252;
+  --code-head: #232832;
+  --flow-bg:   #272C36;
+  --pop-bg:    #353C49;
+  --list-bg:   rgba(39,44,54,.55);
+  --list-bg-solid: rgba(39,44,54,.95);
+
+  --code-tx:   #D8DEE9;
+  --code-cl:   #ECEFF4;
+  --code-cm:   #7F8A9C;
+  --hl-kw:     #81A1C1;
+  --hl-st:     #A3BE8C;
+  --hl-nu:     #EBCB8B;
+  --hl-ip:     #88C0D0;
+
+  --amber-tx:  #F0D9A6;
+  --amber-tx2: #F6E5BE;
+  --amber-tx3: #D9C48F;
+  --amber-bg:  #322C1E;
+  --amber-line: rgba(235,203,139,.42);
+
+  --tx-hi:     #F4F7FB;
+  --wash-1:    rgba(255,255,255,.040);
+  --wash-2:    rgba(255,255,255,.060);
+  --wash-3:    rgba(255,255,255,.085);
+  --scrim:     rgba(20,24,31,.55);
+  --shadow:    rgba(0,0,0,.55);
+  --rail-a:    rgba(46,52,64,.92);
+  --rail-b:    rgba(36,41,51,.92);
+  --logo-a:    #3B4252;
+  --logo-b:    #2B313C;
+  --btn-ink:   #1B222B;
+  --btn-a:     #A7D4E0;
+  --btn-b:     #88C0D0;
+
+  --accent-ink: #EAF6F9;
+  --iris-soft:  rgba(136,192,208,.16);
+  --glow-1:     rgba(136,192,208,.10);
+  --glow-2:     rgba(235,203,139,.05);
+  --dots-1:     #46333A;
+  --dots-2:     #453E2C;
+  --dots-3:     #2C3B31;
+  --hud-rgb:    36, 41, 51;
+  color-scheme: dark;
+}
+
+/* ----- 终端 terminal：黑底荧光绿，等宽字更突出 ----- */
+html[data-skin="terminal"] {
+  --bg:        #070B09;
+  --bg-2:      #0A100D;
+  --panel:     #0D1410;
+  --panel-2:   #111A15;
+  --panel-3:   #16221B;
+  --line:      #1A2A21;
+  --line-2:    #24402F;
+  --line-3:    #315A43;
+
+  --tx:        #D5F3E1;
+  --tx-2:      #86B29B;
+  --tx-3:      #5A7E6D;
+
+  --iris:      #35E08A;
+  --iris-d:    #0F2E20;
+  --amber:     #E8D44D;
+  --amber-d:   #2A2A0C;
+  --mint:      #35E08A;
+  --mint-d:    #0B2618;
+  --rose:      #FF7B72;
+  --rose-d:    #2C1311;
+  --sky:       #5FD3F3;
+
+  --code-bg:   #060A08;
+  --code-line: #16221B;
+  --code-head: #0A110E;
+  --flow-bg:   #080D0B;
+  --pop-bg:    #111A15;
+  --list-bg:   rgba(6,10,8,.55);
+  --list-bg-solid: rgba(6,10,8,.95);
+
+  --code-tx:   #A9D9C3;
+  --code-cl:   #D5F3E1;
+  --code-cm:   #4E6F5F;
+  --hl-kw:     #35E08A;
+  --hl-st:     #E8D44D;
+  --hl-nu:     #FF9E64;
+  --hl-ip:     #5FD3F3;
+
+  --amber-tx:  #F0E08A;
+  --amber-tx2: #F7ECAF;
+  --amber-tx3: #CBBB72;
+  --amber-bg:  #1F1E08;
+  --amber-line: rgba(232,212,77,.40);
+
+  --tx-hi:     #EBFBF3;
+  --wash-1:    rgba(53,224,138,.045);
+  --wash-2:    rgba(53,224,138,.070);
+  --wash-3:    rgba(53,224,138,.100);
+  --scrim:     rgba(2,6,4,.60);
+  --shadow:    #000;
+  --rail-a:    rgba(13,20,16,.92);
+  --rail-b:    rgba(5,9,7,.92);
+  --logo-a:    #12301F;
+  --logo-b:    #0A1A11;
+  --btn-ink:   #04170D;
+  --btn-a:     #6BF0AE;
+  --btn-b:     #2BD97C;
+
+  --accent-ink: #D9FFE9;
+  --iris-soft:  rgba(53,224,138,.14);
+  --glow-1:     rgba(53,224,138,.07);
+  --glow-2:     rgba(232,212,77,.035);
+  --dots-1:     #3A2326;
+  --dots-2:     #35331B;
+  --dots-3:     #1C3326;
+  --hud-rgb:    7, 11, 9;
+  color-scheme: dark;
+}
+
+/* ----- 墨玉 jade：墨绿灰底 + 玉青主色，和上面的荧光终端是两个路子 ----- */
+html[data-skin="jade"] {
+  --bg:        #0E1512;
+  --bg-2:      #111915;
+  --panel:     #131C18;
+  --panel-2:   #18221D;
+  --panel-3:   #1D2923;
+  --line:      #22302A;
+  --line-2:    #2C4038;
+  --line-3:    #3A544A;
+
+  --tx:        #E3F0EA;
+  --tx-2:      #9BB5AA;
+  --tx-3:      #6C877C;
+
+  --iris:      #6FD6B4;
+  --iris-d:    #123029;
+  --amber:     #E0B96A;
+  --amber-d:   #2B2313;
+  --mint:      #6FD6B4;
+  --mint-d:    #10261F;
+  --rose:      #E2798A;
+  --rose-d:    #2A1519;
+  --sky:       #74B8D8;
+
+  --code-bg:   #0B1210;
+  --code-line: #1C2A24;
+  --code-head: #101815;
+  --flow-bg:   #0C1310;
+  --pop-bg:    #18221D;
+  --list-bg:   rgba(14,21,18,.55);
+  --list-bg-solid: rgba(14,21,18,.95);
+
+  --code-tx:   #BFD6CB;
+  --code-cl:   #E3F0EA;
+  --code-cm:   #5F7A6E;
+  --hl-kw:     #7FE0C0;
+  --hl-st:     #A9D98A;
+  --hl-nu:     #E3C078;
+  --hl-ip:     #79C6DE;
+
+  --amber-tx:  #EBCB8F;
+  --amber-tx2: #F2DDAD;
+  --amber-tx3: #CDB27C;
+  --amber-bg:  #231C0F;
+  --amber-line: rgba(224,185,106,.40);
+
+  --tx-hi:     #F0FBF6;
+  --wash-1:    rgba(111,214,180,.035);
+  --wash-2:    rgba(111,214,180,.055);
+  --wash-3:    rgba(111,214,180,.080);
+  --scrim:     rgba(4,10,8,.58);
+  --shadow:    #000;
+  --rail-a:    rgba(19,28,24,.92);
+  --rail-b:    rgba(10,16,13,.92);
+  --logo-a:    #1E3A30;
+  --logo-b:    #12241D;
+  --btn-ink:   #06130F;
+  --btn-a:     #8FE8CB;
+  --btn-b:     #5CCBA8;
+
+  --accent-ink: #E4FFF4;
+  --iris-soft:  rgba(111,214,180,.15);
+  --glow-1:     rgba(111,214,180,.07);
+  --glow-2:     rgba(224,185,106,.035);
+  --dots-1:     #35272A;
+  --dots-2:     #33301E;
+  --dots-3:     #1D3329;
+  --hud-rgb:    14, 21, 18;
+  color-scheme: dark;
+}
+
+/* ----- 暖砂 sepia：米黄纸感，长时间看代码不刺眼 ----- */
+html[data-skin="sepia"] {
+  --bg:        #F5EFE3;
+  --bg-2:      #EFE7D8;
+  --panel:     #FBF6EC;
+  --panel-2:   #F6F0E3;
+  --panel-3:   #EDE4D2;
+  --line:      #E4D9C6;
+  --line-2:    #D5C7AD;
+  --line-3:    #BFAD8D;
+
+  --tx:        #2B2419;
+  --tx-2:      #5F5443;
+  --tx-3:      #8C8069;
+
+  --iris:      #2C6B70;
+  --iris-d:    #E0EEEE;
+  --amber:     #96580E;
+  --amber-d:   #F7EAD6;
+  --mint:      #3F7A46;
+  --mint-d:    #E3F1E5;
+  --rose:      #A63A3A;
+  --rose-d:    #F8E4DE;
+  --sky:       #1F6FA8;
+
+  --code-bg:   #FDF9F1;
+  --code-line: #EFE6D5;
+  --code-head: #F6EFE1;
+  --flow-bg:   #F9F3E8;
+  --pop-bg:    #FDF9F1;
+  --list-bg:   rgba(251,246,236,.62);
+  --list-bg-solid: rgba(251,246,236,.97);
+
+  --code-tx:   #473C2C;
+  --code-cl:   #221C13;
+  --code-cm:   #9A8C74;
+  --hl-kw:     #2C6B70;
+  --hl-st:     #3F7A46;
+  --hl-nu:     #8A5B00;
+  --hl-ip:     #1F6FA8;
+
+  --amber-tx:  #7E4A08;
+  --amber-tx2: #6B3E05;
+  --amber-tx3: #82581A;
+  --amber-bg:  #FBF0DC;
+  --amber-line: rgba(150,88,14,.36);
+
+  --tx-hi:     #17120B;
+  --wash-1:    rgba(43,36,25,.032);
+  --wash-2:    rgba(43,36,25,.050);
+  --wash-3:    rgba(43,36,25,.075);
+  --scrim:     rgba(43,36,25,.30);
+  --shadow:    rgba(43,36,25,.18);
+  --rail-a:    rgba(253,248,239,.95);
+  --rail-b:    rgba(240,232,217,.95);
+  --logo-a:    #E8DFCB;
+  --logo-b:    #F6EFE1;
+  --btn-ink:   #FFFFFF;
+  --btn-a:     #3B858B;
+  --btn-b:     #2C6B70;
+
+  --accent-ink: #2C6B70;
+  --iris-soft:  rgba(44,107,112,.12);
+  --glow-1:     rgba(44,107,112,.07);
+  --glow-2:     rgba(150,88,14,.05);
+  --dots-1:     #E4C9C2;
+  --dots-2:     #E6DCC0;
+  --dots-3:     #CFE0CD;
+  --hud-rgb:    245, 239, 227;
+  color-scheme: light;
+}
+
+/* ----- 樱雾 sakura：淡粉紫，浅色里偏柔的一档 ----- */
+html[data-skin="sakura"] {
+  --bg:        #FBF4F7;
+  --bg-2:      #F6EDF1;
+  --panel:     #FFFFFF;
+  --panel-2:   #FCF7F9;
+  --panel-3:   #F5EAEF;
+  --line:      #F0E2E8;
+  --line-2:    #E3CFD8;
+  --line-3:    #CDB3BF;
+
+  --tx:        #241B21;
+  --tx-2:      #5E4C56;
+  --tx-3:      #917E89;
+
+  --iris:      #A8467A;
+  --iris-d:    #FBE6EF;
+  --amber:     #96580E;
+  --amber-d:   #FAEEDD;
+  --mint:      #2F7A5F;
+  --mint-d:    #E1F2EC;
+  --rose:      #B03050;
+  --rose-d:    #FBE4EA;
+  --sky:       #1F6FA8;
+
+  --code-bg:   #FFFFFF;
+  --code-line: #F6ECF1;
+  --code-head: #FBF4F7;
+  --flow-bg:   #FAF2F6;
+  --pop-bg:    #FFFFFF;
+  --list-bg:   rgba(252,247,249,.62);
+  --list-bg-solid: rgba(252,247,249,.97);
+
+  --code-tx:   #3E2C36;
+  --code-cl:   #1D1419;
+  --code-cm:   #9C8791;
+  --hl-kw:     #A8467A;
+  --hl-st:     #2F7A5F;
+  --hl-nu:     #8A5B00;
+  --hl-ip:     #1F6FA8;
+
+  --amber-tx:  #7E4A08;
+  --amber-tx2: #6B3E05;
+  --amber-tx3: #82581A;
+  --amber-bg:  #FBF0DC;
+  --amber-line: rgba(150,88,14,.36);
+
+  --tx-hi:     #150D12;
+  --wash-1:    rgba(36,27,33,.030);
+  --wash-2:    rgba(36,27,33,.048);
+  --wash-3:    rgba(36,27,33,.072);
+  --scrim:     rgba(36,27,33,.30);
+  --shadow:    rgba(80,30,55,.16);
+  --rail-a:    rgba(255,255,255,.95);
+  --rail-b:    rgba(250,242,246,.95);
+  --logo-a:    #F2DEE7;
+  --logo-b:    #FBF4F7;
+  --btn-ink:   #FFFFFF;
+  --btn-a:     #C2638F;
+  --btn-b:     #A8467A;
+
+  --accent-ink: #A8467A;
+  --iris-soft:  rgba(168,70,122,.12);
+  --glow-1:     rgba(168,70,122,.08);
+  --glow-2:     rgba(150,88,14,.04);
+  --dots-1:     #EED4DC;
+  --dots-2:     #EDE6CE;
+  --dots-3:     #D6E6DA;
+  --hud-rgb:    251, 244, 247;
+  color-scheme: light;
+}
+
+/* 每套皮肤在自己的块里写 color-scheme（单选/滚动条/原生控件跟着变），
+   不再用一份合并选择器——那种写法换肤时很容易漏掉新加的那套。 */
 
 /* ============================================================
    主题切换
    ============================================================ */
-.theme-btn {
+/* ============================================================
+   皮肤切换（左轨底部按钮 → 面板里挑）
+   ------------------------------------------------------------
+   面板里每张卡的预览不是截图，是用这套皮肤自己的变量现画的迷你窗口：
+   底色 / 侧栏 / 三条代码行 / 一个主色块。以后加皮肤不用配图。
+   ============================================================ */
+.skin-btn {
   width: 46px; height: 38px;
   display: grid; place-items: center;
   border-radius: 11px;
   color: var(--tx-3);
   transition: .15s;
 }
-.theme-btn:hover { color: var(--tx); background: var(--wash-1); }
-.theme-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.skin-btn:hover { color: var(--tx); background: var(--wash-1); }
+.skin-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .rail-grow { flex: 1 1 auto; }
+
+.skin-dlg { position: fixed; inset: 0; z-index: 150; display: none; }
+.skin-dlg.on { display: block; }
+.sk-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.sk-panel {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(700px, calc(100% - 32px));
+  max-height: min(78vh, 640px);
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: 0 32px 74px -34px var(--shadow);
+  overflow: hidden;
+  animation: sk-in .18s var(--ease);
+}
+@keyframes sk-in {
+  from { opacity: 0; transform: translate(-50%, -47%) scale(.985); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.sk-head {
+  display: flex; align-items: center; gap: 10px;
+  flex: 0 0 auto;
+  padding: 15px 16px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.sk-head b { font-size: 14.5px; font-weight: 650; letter-spacing: .2px; }
+.sk-head span { font-size: 11.5px; color: var(--tx-3); }
+.sk-x {
+  margin-left: auto;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  font-size: 17px; line-height: 1;
+  color: var(--tx-3);
+  transition: .14s;
+}
+.sk-x:hover { color: var(--tx); background: var(--wash-2); }
+
+.sk-grid {
+  display: grid;
+  /* 8 套皮肤刚好两行四列。再加皮肤时这里会自动折行，不用改 */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  padding: 14px;
+  overflow: auto;
+}
+.sk-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--wash-1);
+  text-align: left;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.sk-card:hover { border-color: var(--line-3); background: var(--wash-2); transform: translateY(-1px); }
+.sk-card[data-active="1"] {
+  border-color: var(--iris);
+  background: var(--iris-d);
+  box-shadow: 0 0 0 1px var(--iris) inset;
+}
+.sk-card[data-active="1"]::after {
+  content: '✓';
+  position: absolute; top: 6px; right: 7px;
+  width: 16px; height: 16px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--iris);
+  color: var(--btn-ink);
+  font-size: 10px; font-weight: 700;
+}
+
+/* 迷你窗口预览：全部吃 --p-* 变量，由 JS 按皮肤内联上来 */
+.sk-prev {
+  display: flex;
+  height: 54px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--p-bg);
+  border: 1px solid var(--p-line);
+}
+.sk-prev .sk-rail {
+  width: 17px;
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding-top: 8px;
+  background: var(--p-rail);
+  border-right: 1px solid var(--p-line);
+}
+.sk-prev .sk-rail i { width: 7px; height: 7px; border-radius: 3px; background: var(--p-iris); opacity: .9; }
+.sk-prev .sk-rail i + i { background: var(--p-tx); opacity: .20; }
+.sk-rows {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 5px; padding: 8px 10px;
+}
+.sk-rows i { display: block; height: 4px; border-radius: 2px; background: var(--p-tx); opacity: .28; }
+.sk-rows i:nth-child(1) { width: 58%; opacity: .42; }
+.sk-rows i:nth-child(2) { width: 86%; }
+.sk-rows i:nth-child(3) { width: 44%; background: var(--p-iris); opacity: .95; }
+
+.sk-name { font-size: 12.5px; font-weight: 600; color: var(--tx); }
+.sk-desc { font-size: 10.5px; color: var(--tx-3); margin-top: -5px; }
+
+@media (max-width: 720px) {
+  .sk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 430px) {
+  .sk-grid { grid-template-columns: 1fr; }
+  .sk-prev { height: 46px; }
+}
 
 /* ============================================================
    收藏
@@ -1573,7 +2161,7 @@ html[data-theme="light"] body {
 }
 
 @media (max-width: 860px) {
-  .theme-btn { width: 54px; height: 46px; flex: none; }
+  .skin-btn { width: 54px; height: 46px; flex: none; }
 }
 
 /* ============================================================
@@ -1583,8 +2171,9 @@ html[data-theme="light"] body {
    普通窗口里 #hudShell 是 display:contents，不生成盒子，
    #app 的布局跟没有这层包裹时完全一致。
    ============================================================ */
-:root { --hud-rgb: 12, 15, 21; }
-html[data-theme="light"] { --hud-rgb: 249, 250, 252; }
+/* 悬浮窗卡片底色的 RGB 由各皮肤自己给（--hud-rgb），这里不再兜底覆盖：
+   以前固定在 :root 写 12,15,21，换肤后卡片底色就停在旧颜色上，
+   在透明窗口里表现为「皮肤换了，那张半透明的卡片还是原来那个调」。 */
 
 #hudShell { display: contents; }
 #hudBar, .hud-grip { display: none; }
@@ -1605,8 +2194,12 @@ html[data-hud="1"] #hudShell {
   inset: 0;
   border-radius: 12px;
   overflow: hidden;
-  /* 卡片底色半透明，alpha 由主进程写进 --hud-a（菜单里 100 / 92 / 82 / 72） */
-  background: rgba(var(--hud-rgb), var(--hud-a, .92));
+  /* 卡片底色半透明，alpha 由主进程写进 --hud-a（菜单里 100 / 92 / 82 / 72）。
+     两行是故意的：第一行给老 WebView 兜底（rgba + --hud-rgb），
+     第二行 color-mix 直接吃 --bg —— 这样换皮肤时卡片底色一定跟着变，
+     不依赖 --hud-rgb 有没有人记得同步。不支持的浏览器会忽略第二行，退回第一行。 */
+  background: rgba(var(--hud-rgb, 9, 11, 16), var(--hud-a, .92));
+  background: color-mix(in srgb, var(--bg) calc(var(--hud-a, .92) * 100%), transparent);
   border: 1px solid var(--line-2);
 }
 

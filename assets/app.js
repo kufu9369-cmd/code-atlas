@@ -32,7 +32,6 @@
   }
   const LS = 'codeatlas.vals.v1';
   const LS_FAV = 'codeatlas.fav.v1';
-  const LS_THEME = 'codeatlas.theme.v1';
 
   /* ---------- 变量存储（localStorage 持久化） ---------- */
   let VAL = {};
@@ -50,19 +49,20 @@
   const favKey = (kind, id) => kind + ':' + id;
   const isFav = (kind, id) => FAV.has(favKey(kind, id));
 
-  /* ---------- 主题 ---------- */
-  let THEME = 'dark';
-  try { THEME = localStorage.getItem(LS_THEME) || ''; } catch (e) { THEME = ''; }
-  if (THEME !== 'light' && THEME !== 'dark') {
-    THEME = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+  /* ---------- 皮肤 ----------
+     皮肤表和切换逻辑在 assets/skins.js（单独成文件是为了命令行能验）。
+     这里只包一层，顺手把左轨按钮上的名字刷一下。 */
+  const SK = window.SKINS;
+  function curSkin() {
+    return (SK && SK.MAP[SK.current()]) || { id: 'midnight', name: '深空' };
   }
-  function applyTheme(t, rerender) {
-    THEME = t;
-    document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem(LS_THEME, t); } catch (e) {}
-    const m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'light' ? '#F4F6F9' : '#090B10');
+  /* save=false 只给首次启动用：启动时按「存的 > 系统的」推出来一套，
+     但不写回 localStorage —— 一旦写回，用户系统切深色时就不跟随了。 */
+  function applySkin(id, rerender, save) {
+    if (!SK) return null;
+    const s = SK.apply(id, save !== false);
     if (rerender) renderRail();
+    return s;
   }
 
   /* ---------- 状态 ---------- */
@@ -262,6 +262,7 @@
     star: svg('<path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z"/>'),
     sun: svg('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M18.5 5.5l-1.6 1.6M7.1 16.9l-1.6 1.6"/>'),
     moon: svg('<path d="M20.2 14.2A8.5 8.5 0 0 1 9.8 3.8a8.5 8.5 0 1 0 10.4 10.4z"/>'),
+    palette: svg('<path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.35 0 1.9-.95 1.45-1.95-.5-1.15.32-2.35 1.75-2.35h1.25a3.55 3.55 0 0 0 3.55-3.55c0-5.05-3.55-9.35-8-9.35z"/><circle cx="8.5" cy="9.3" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.3" cy="7.7" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.7" cy="10.2" r="1.05" fill="currentColor" stroke="none"/>'),
     flask: svg('<path d="M9.4 3.4v6.2L4.9 17a2.1 2.1 0 0 0 1.85 3.15h10.5A2.1 2.1 0 0 0 19.1 17l-4.5-7.4V3.4"/><path d="M8.2 3.4h7.6"/><path d="M7.3 13.8h9.4"/>'),
     pack: svg('<path d="M12 3.6v9.4M8.3 9.2l3.7 3.8 3.7-3.8"/><path d="M4.5 15.2v2.6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2.6"/>'),
     arrow: '<span class="ar">›</span>'
@@ -310,12 +311,51 @@
       + ICON.star + (FAV.size ? '<span class="dot-fav"></span>' : '')
       + '<span class="tip">收藏 · ' + FAV.size + ' 项（全站）</span></button>';
     h += '<div class="rail-grow"></div>';
-    h += '<button class="theme-btn" data-theme-toggle aria-label="切换主题" title="'
-      + (THEME === 'light' ? '切到深色' : '切到浅色') + '">'
-      + (THEME === 'light' ? ICON.moon : ICON.sun) + '</button>';
+    h += '<button class="skin-btn" data-skin-open aria-label="皮肤" title="皮肤 · '
+      + esc(curSkin().name) + '（点一下换）">' + ICON.palette + '</button>';
     h += '<div class="rail-ver">v' + esc(D.meta.version) + '</div>';
     $('#rail').innerHTML = h;
   }
+
+  /* ---------- 皮肤面板 ----------
+     每张卡的迷你预览是现画的（吃 --p-* 变量），不是截图：
+     以后加皮肤只改 skins.js 的 LIST，这里不用动一行。 */
+  function renderSkins() {
+    const g = $('#skGrid');
+    if (!g || !SK) return;
+    const cur = SK.current();
+    g.innerHTML = SK.LIST.map(s =>
+      '<button class="sk-card" data-skin="' + s.id + '" data-active="' + (s.id === cur ? 1 : 0) + '"'
+      + ' style="' + SK.previewStyle(s) + '" title="' + esc(s.name + ' — ' + s.desc) + '">'
+      + '<span class="sk-prev">'
+      +   '<span class="sk-rail"><i></i><i></i><i></i></span>'
+      +   '<span class="sk-rows"><i></i><i></i><i></i></span>'
+      + '</span>'
+      + '<span class="sk-name">' + esc(s.name) + '</span>'
+      + '<span class="sk-desc">' + esc(s.desc) + '</span>'
+      + '</button>').join('');
+  }
+  function openSkins() {
+    const d = $('#skinDlg');
+    if (!d) return;
+    renderSkins();
+    d.classList.add('on');
+    d.setAttribute('aria-hidden', 'false');
+  }
+  function closeSkins() {
+    const d = $('#skinDlg');
+    if (!d) return;
+    d.classList.remove('on');
+    d.setAttribute('aria-hidden', 'true');
+  }
+
+  /* 换肤后统一在这里刷新：左轨按钮上的皮肤名、面板里的对勾。
+     放在事件里而不是 applySkin 里，是因为悬浮窗换了皮肤
+     （另一个窗口，走 storage 事件）时本窗也要跟着对上。 */
+  window.addEventListener('skin:change', () => {
+    renderRail();
+    if ($('#skinDlg') && $('#skinDlg').classList.contains('on')) renderSkins();
+  });
 
   /* ---------- 专题内部的分类胶囊 ---------- */
   function renderCatTabs() {
@@ -1456,11 +1496,14 @@
     /* 知识包：点遮罩关闭 */
     if (t.id === 'packDlg' && t.classList.contains('on')) { closePacks(); return; }
 
-    /* 主题切换 */
-    if (t.closest('[data-theme-toggle]')) {
-      applyTheme(THEME === 'light' ? 'dark' : 'light', true);
+    /* 皮肤：开面板 / 选一套 / 关掉 */
+    if (t.closest('[data-skin-open]')) { openSkins(); return; }
+    const skCard = t.closest('[data-skin]');
+    if (skCard && skCard.classList.contains('sk-card')) {
+      applySkin(skCard.dataset.skin, false);
       return;
     }
+    if (t.closest('[data-skin-close]')) { closeSkins(); return; }
 
     /* 左轨：大图标切专题，小图标切视图 */
     const nav = t.closest('[data-nav]');
@@ -1622,6 +1665,7 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if ($('#skinDlg') && $('#skinDlg').classList.contains('on')) { closeSkins(); return; }
       if (document.body.classList.contains('pack-open')) { closePacks(); return; }
       if (document.body.classList.contains('docs-open')) { closeDocs(); return; }
       if ($('#popover').classList.contains('on')) { closePop(); return; }
@@ -1698,7 +1742,7 @@
     }
   }
 
-  applyTheme(THEME, false);
+  applySkin(SK ? SK.detect() : 'midnight', false, false);
   const kbd = $('#kbd');
   if (kbd && !/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent)) kbd.textContent = 'Ctrl K';
   applyHash();
@@ -1714,7 +1758,7 @@
 
   window.CodeAtlas = {
     S, D, gotoView, gotoTopic, gotoSnippet, gotoFlow, gotoPreset, gotoLab,
-    toggleFav, applyTheme, searchGroups, favGroups,
+    toggleFav, applySkin, openSkins, closeSkins, searchGroups, favGroups,
     openPacks, closePacks, runPackCheck, doPackInstall,
     closeDocs, closePop,
     get FAV() { return FAV; },

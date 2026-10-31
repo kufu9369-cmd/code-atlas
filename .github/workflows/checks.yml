@@ -24,6 +24,11 @@ jobs:
       - name: eNSP 分片（id 冲突、变量未定义、拓扑越界、预设 ref、工作流 end）
         run: node _dev/check-ensp.js
 
+      # 皮肤包：每套皮肤的选择器/变量是否写全，--hud-rgb 与 --bg 是否一致。
+      # 最后那条最容易漏 —— 它错了不会报错，只会让透明悬浮窗带上不属于该皮肤的底色。
+      - name: 皮肤包（选择器、60 个颜色变量、--hud-rgb 与 --bg 一致性）
+        run: node _dev/check-skins.js
+
       - name: 配置剧本（全角符号、视图链、who 连续性）
         run: node _dev/check-recipes.js
 

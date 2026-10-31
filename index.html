@@ -9,15 +9,31 @@
 <link rel="stylesheet" href="assets/styles.css">
 <script>
 (function () {
+  /* 首屏防闪：皮肤的 data-skin 必须在样式表之后、首个盒子画出来之前就挂好，
+     否则会先闪一下默认的深空再变。
+     这里那两张表是从 assets/skins.js 抄过来的（那份要等 body 末尾才加载），
+     两边不一致的话 `node _dev/check-skins.js` 会报出来。 */
+  var MODE = { midnight: 'dark', daylight: 'light', nord: 'dark', void: 'dark',
+               terminal: 'dark', jade: 'dark', sepia: 'light', sakura: 'light' };
+  var BG   = { midnight: '#090B10', daylight: '#F4F6F9', nord: '#242933', void: '#000000',
+               terminal: '#070B09', jade: '#0E1512', sepia: '#F5EFE3', sakura: '#FBF4F7' };
+  var s = '';
   try {
-    var t = localStorage.getItem('codeatlas.theme.v1');
-    if (t !== 'light' && t !== 'dark') {
-      t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+    s = localStorage.getItem('codeatlas.skin.v1') || '';
+    if (!MODE[s]) {
+      /* 旧版只存 dark / light */
+      var t = localStorage.getItem('codeatlas.theme.v1') || '';
+      s = t === 'light' ? 'daylight' : (t === 'dark' ? 'midnight' : '');
     }
-    document.documentElement.setAttribute('data-theme', t);
-    var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'light' ? '#F4F6F9' : '#090B10');
   } catch (e) {}
+  if (!MODE[s]) {
+    s = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'daylight' : 'midnight';
+  }
+  var r = document.documentElement;
+  r.setAttribute('data-skin', s);
+  r.setAttribute('data-theme', MODE[s]);
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', BG[s]);
 })();
 /* 悬浮窗模式：桌面端用 index.html?hud=1 打开的那个窗口。
    必须在首屏渲染前就定下来，否则会先闪一下不透明的底再变透明。 */
@@ -107,8 +123,21 @@
 <aside id="docsPanel" aria-hidden="true" aria-label="官方解答"></aside>
 <div id="popover" role="dialog" aria-modal="false"></div>
 <div id="packDlg" class="pack-dlg" aria-hidden="true"></div>
+<!-- 皮肤面板：内容由 assets/app.js 的 renderSkins() 填 -->
+<div id="skinDlg" class="skin-dlg" aria-hidden="true">
+  <div class="sk-scrim" data-skin-close></div>
+  <div class="sk-panel" role="dialog" aria-modal="true" aria-label="皮肤">
+    <header class="sk-head">
+      <b>皮肤</b>
+      <span>点一下即时生效，桌面端和悬浮窗一起换</span>
+      <button class="sk-x" data-skin-close title="关闭（Esc）">×</button>
+    </header>
+    <div class="sk-grid" id="skGrid"></div>
+  </div>
+</div>
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="assets/skins.js"></script>
 <script src="assets/data.js"></script>
 <!-- 专题层：大图标入口 = 专题，分类降为专题内部的小胶囊 -->
 <script src="assets/topics.js"></script>

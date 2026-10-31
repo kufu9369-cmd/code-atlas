@@ -42,22 +42,36 @@
     return document.documentElement.getAttribute('data-theme') === 'light';
   }
 
+  /* 状态栏底色跟着皮肤走（以前写死成深空/日间两个色，
+     换成极夜或暖砂时状态栏会突兀地停在上一个颜色） */
+  function skinBg() {
+    try {
+      var S = window.SKINS;
+      if (S && S.MAP) {
+        var s = S.MAP[S.current()];
+        if (s && s.p && s.p.bg) return s.p.bg;
+      }
+    } catch (e) {}
+    return isLight() ? '#F4F6F9' : '#090B10';
+  }
+
   function paintStatusBar() {
     if (!StatusBar) return;
     var light = isLight();
     quiet(StatusBar.setOverlaysWebView({ overlay: false }));
     /* DARK = 浅色字（配深色背景）；LIGHT = 深色字（配浅色背景） */
     quiet(StatusBar.setStyle({ style: light ? 'LIGHT' : 'DARK' }));
-    quiet(StatusBar.setBackgroundColor({ color: light ? '#F4F6F9' : '#090B10' }));
+    quiet(StatusBar.setBackgroundColor({ color: skinBg() }));
   }
 
   function watchTheme() {
     var mo = new MutationObserver(function (list) {
       for (var i = 0; i < list.length; i++) {
-        if (list[i].attributeName === 'data-theme') { paintStatusBar(); return; }
+        var a = list[i].attributeName;
+        if (a === 'data-theme' || a === 'data-skin') { paintStatusBar(); return; }
       }
     });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-skin'] });
   }
 
   /* ---------------- 返回键 ---------------- */
