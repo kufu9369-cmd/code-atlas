@@ -551,6 +551,11 @@ npm run dist       # 出安装包，产物在 dist/
 | `dist/CodeAtlas-Setup-1.1.6.exe` | 安装版，可选目录、建桌面和开始菜单快捷方式 |
 | `dist/app-debug.apk` | Android debug 签名包（同 `android/app/build/outputs/apk/debug/` 那份） |
 
+> **换了图标但桌面还是旧的？** Windows 的图标缓存按**路径**记，不比对文件改没改，
+> 重装也不会刷新。跑 `python _dev/fix-icon-cache.py`：把 `iconcache_*.db` 挪到备份目录
+> （不删，可回退）再重启资源管理器。手动做法是任务管理器里结束「Windows 资源管理器」，
+> 删掉 `%LOCALAPPDATA%\Microsoft\Windows\Explorer\iconcache_*.db`，再重新启动它。
+
 外壳在 `electron/main.js`，它负责这些事：
 
 - 用自定义 `app://bundle/` 协议加载页面（**不是 `file://`**）。这样 localStorage 有稳定的 origin，换盘符、升级版本都不丢数据。
@@ -642,6 +647,9 @@ code-atlas/
 │   ├── shot-task.js        可执行任务回归：渲染 / 改参 → 进度 / 按设备复制 / 收藏与搜索
 │   ├── win-probe.py        真屏截窗口（capturePage 拍不到系统标题栏和窗口按钮）
 │   ├── click-probe.py      真屏点一下再截，验「点得到 / 点不到」
+│   ├── desk-shot.py        显示桌面拍一张（看快捷方式到底画成什么图标）
+│   ├── icon-probe.py       问 Shell「这个文件你画成什么图标」，存成 PNG 比对
+│   ├── fix-icon-cache.py   重建图标缓存（挪备份 + 重启资源管理器，可回退）
 │   └── hud-screen-test.js  全屏 A/B 采样，验证透明窗真的透出桌面
 ├── scripts/
 │   ├── prepare-www.js      生成 www/（Android 打包用的静态资源目录）
