@@ -610,7 +610,8 @@ code-atlas/
 ├── electron/preload.js     主进程 ↔ 页面桥：悬浮窗控制 + 剪贴板读写
 ├── electron/copysel.js     替用户按 Ctrl+C：等修饰键松开 → 注入 → 前台是自己就跳过
 ├── android/                Capacitor 生成的 Android 工程（只改了图标、名称、清单、镜像源）
-├── build/                  图标源文件（icon.ico / icon.png / android 各密度）
+├── logo.png                **图标图源**：改图标只换这张，跑 `npm run icons` 派生全平台
+├── build/                  图标产物（icon.ico / icon.png / android 各密度，脚本生成勿手改）
 ├── examples/               示例知识包，可直接导入试手
 ├── _dev/                   命令行自检（不参与打包）
 │   ├── check-all.js        全站内容：id 唯一、变量闭合、ref 有效、专题归属、幂等
@@ -631,7 +632,7 @@ code-atlas/
 │   └── hud-screen-test.js  全屏 A/B 采样，验证透明窗真的透出桌面
 ├── scripts/
 │   ├── prepare-www.js      生成 www/（Android 打包用的静态资源目录）
-│   ├── make-icon.py        生成 Windows 图标 + Android 自适应图标 + 启动图
+│   ├── make-icon.py        从 logo.png 派生 Windows 图标 + Android 自适应图标 + 启动图
 │   └── shot-regress.py     启动打包后的成品，自己截图做回归
 ├── www/                    构建产物：给 Capacitor 的纯净静态目录（勿手改）
 ├── dist/                   构建产物：桌面 exe（勿手改）
