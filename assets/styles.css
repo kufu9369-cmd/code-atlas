@@ -157,6 +157,29 @@ a:hover { text-decoration: underline; }
 }
 
 /* ============================================================
+   无标题栏窗口的拖动区（只在桌面端）
+   ------------------------------------------------------------
+   系统那条写着「码典 CodeAtlas · 可配置的代码大全」的深色标题栏被去掉了，
+   窗口得由页面自己拖着走。-webkit-app-region 是 Chromium 原生实现的，
+   不需要 JS：标了 drag 的地方按下即拖窗口，标了 no-drag 的按钮照常点。
+
+   拖动区一共三处：顶部这条 12px 透明条（内容都是留白，不挡操作）、
+   列表栏顶栏的留白、左轨图标之间的空隙。网页版 / 安卓版不会挂
+   data-desk="1"，下面这些规则一条都不生效。
+   ============================================================ */
+#dragTop { display: none; }
+
+html[data-desk="1"] #dragTop {
+  display: block;
+  position: fixed; left: 0; right: 0; top: 0;
+  height: 12px;
+  z-index: 80;
+  -webkit-app-region: drag;
+}
+html[data-desk="1"] #rail { -webkit-app-region: drag; }
+html[data-desk="1"] #rail > * { -webkit-app-region: no-drag; }
+
+/* ============================================================
    左轨
    ============================================================ */
 #rail {
@@ -169,20 +192,6 @@ a:hover { text-decoration: underline; }
   background: linear-gradient(180deg, var(--rail-a), var(--rail-b));
   backdrop-filter: blur(12px);
   z-index: 30;
-}
-
-.rail-logo {
-  width: 38px; height: 38px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  background: linear-gradient(150deg, var(--logo-a), var(--logo-b));
-  border: 1px solid var(--line-2);
-  color: var(--amber);
-  font-family: var(--mono);
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 14px;
-  box-shadow: 0 1px 0 var(--wash-2) inset, 0 6px 18px -8px var(--shadow);
 }
 
 .rail-btn {
@@ -309,21 +318,16 @@ a:hover { text-decoration: underline; }
   backdrop-filter: blur(10px);
 }
 
-.lp-head { padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
-
-.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.brand .mark {
-  width: 28px; height: 28px; display: grid; place-items: center;
-  border-radius: 8px; background: var(--amber-d);
-  border: 1px solid rgba(255,180,84,.3);
-  color: var(--amber); font-size: 13px; font-weight: 700;
+/* 列表栏顶栏：现在只剩一个搜索框。
+   原来这里还有「码 + 码典 / CODEATLAS」的品牌块，加上左轨的「码」方块、
+   系统标题栏里的程序名，界面上三处写着同一件事 —— 三处全去掉了。
+   顺便：无标题栏窗口需要拖动区，这条顶栏的留白就是最好的抓手。 */
+.lp-head {
+  padding: 14px 14px 11px;
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
 }
-.brand b { font-size: 15px; font-weight: 650; letter-spacing: .04em; }
-.brand i {
-  font-style: normal; font-family: var(--mono);
-  font-size: 9.5px; color: var(--tx-3); letter-spacing: .14em;
-  display: block; margin-top: -2px; text-transform: uppercase;
-}
+.lp-head .search, .lp-head .cat-tabs { -webkit-app-region: no-drag; }
 
 .search {
   position: relative;
@@ -1403,8 +1407,9 @@ body.docs-open .scrim { display: block; }
     overflow-x: auto;
     z-index: 60;
   }
-  .rail-logo { display: none; }
   .rail-sep, .rail-grow, .rail-ver { display: none; }
+  /* 「⋯」菜单按钮留着：窄窗口也要能进数据目录 / 运行日志。
+     手机上没有这个按钮（页面里的 window.DESKTOP 不存在，根本不渲染）。 */
   .rail-btn { width: auto; height: 46px; flex: 1 1 0; min-width: 0; }
   .rail-btn.on::before {
     left: 50%; top: auto; bottom: -6px;
@@ -1448,7 +1453,7 @@ body.docs-open .scrim { display: block; }
     padding-bottom: calc(62px + env(safe-area-inset-bottom));
     border-right: 0;
   }
-  .lp-head { padding: 14px 14px 10px; }
+  .lp-head { padding: 12px 12px 10px; }
 
   /* 主面板变成全屏滑入 */
   #mainPane {
@@ -2384,14 +2389,14 @@ html[data-hud="1"] .hud-grip:hover::after { opacity: 1; border-color: var(--iris
   html[data-hud="1"] #rail { position: absolute; }
 }
 
-/* ---------- 很矮的窗口：先把不必要的装饰收起来 ----------
-   260 高的时候「码典 / CODESATLAS」这块品牌区要占掉四分之一，
-   悬浮窗的横条上本来就已经写着名字了，干脆让给内容。 */
-html[data-hud="1"] .brand { display: none; }
+/* ---------- 很矮的窗口：先把不必要的留白收起来 ----------
+   品牌块已经不在了（全局去掉），矮窗口只需要把顶栏留白压一压。 */
 html[data-hud="1"] .lp-head { padding: 9px 10px 9px; }
+/* 悬浮窗里不留「⋯」菜单：那块地方是卡住时抢时间查命令的，
+   数据目录 / 运行日志 这类事回主窗口做（菜单本身也还在主窗口上）。 */
+html[data-hud="1"] .rail-menu { display: none; }
 
 @media (max-height: 430px) {
-  .brand { display: none; }
   .lp-head { padding: 8px 10px; }
   .lp-body { padding-bottom: 8px; }
   .lp-foot { padding: 6px 10px; }

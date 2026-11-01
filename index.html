@@ -48,6 +48,13 @@
 </head>
 <body>
 
+<!-- 无标题栏窗口的拖动条。
+     桌面版把系统那条深色标题栏去掉了（见 electron/main.js 的 titleBarStyle），
+     窗口得有个地方能拖：顶部这 12px 透明条 + 列表栏头部留白 + 左轨图标之间的空隙
+     都是拖动区。只有桌面端显示（assets/win.js 给 <html> 挂 data-desk="1"），
+     网页版 / 安卓版一直是隐藏的。 -->
+<div id="dragTop" aria-hidden="true"></div>
+
 <!-- 悬浮窗外壳。
      普通窗口里 #hudShell 是 display:contents —— 不生成盒子，#app 的布局
      跟没有这层包裹时一模一样；只有 ?hud=1（桌面端 Ctrl+Alt+X 叫出来的窗口）
@@ -69,10 +76,6 @@
 
   <section id="listPane">
     <header class="lp-head">
-      <div class="brand">
-        <span class="mark">码</span>
-        <span class="bt"><b>码典</b><i>CodeAtlas</i></span>
-      </div>
       <div class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round">
           <circle cx="11" cy="11" r="6.6"/><path d="M16 16l4 4"/>
@@ -185,6 +188,8 @@
 <script src="assets/app.js"></script>
 <!-- 悬浮窗的窗口交互（拖动条 / 缩放握把 / 尺寸切换）。网页版和安卓版会整段跳过。 -->
 <script src="assets/hud.js"></script>
+<!-- 无标题栏窗口：拖动区开关 + 窗口按钮配色跟着皮肤走（仅桌面主窗口） -->
+<script src="assets/win.js"></script>
 <script src="assets/hudnext.js"></script>
 </body>
 </html>

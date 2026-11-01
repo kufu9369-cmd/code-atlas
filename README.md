@@ -257,8 +257,8 @@ npm run dist           # 出 Windows 安装包（dist/CodeAtlas-Setup-*.exe）
 npm run android:apk    # 出 Android debug APK
 npm run www            # 只重新生成 www/（改了 assets 后要先跑，再 cap sync）
 npm run icons          # 重新生成所有图标和启动图
-npm run check          # 7 个静态自检串起来跑（内容 / 剧本 / 引擎 / 搜索 / 导入 / 语义）
-npm run check:ui       # 任务视图界面回归，截图 + 探针断言都过才算过
+npm run check          # 8 个静态自检串起来跑（内容 / 剧本 / 引擎 / 搜索 / 导入 / 语义 / 导出）
+npm run check:ui       # 界面回归（8 个用例，截图 + 探针断言都过才算过）
 npm run shots          # 启动成品自动截图，做界面回归
 ```
 
@@ -269,7 +269,17 @@ npm run shots          # 启动成品自动截图，做界面回归
 - `Ctrl+I` — 打开知识包（仅桌面版）
 - `Enter` — 搜索框里直接打开第一条结果
 - `Esc` — 依次关闭：下一步面板 → 解答面板 → 变量编辑器 → 清空搜索 → 退出详情
-- `Alt` — 唤出桌面版菜单栏；`F12` 开发者工具；`F11` 全屏
+- `F12` 开发者工具；`F11` 全屏
+- 左栏底部 `⋯` — 桌面版菜单（数据目录 / 运行日志 / 快捷键 / 关于 / 悬浮窗设置）
+
+### 桌面窗口（v1.1.6 起没有标题栏）
+
+主窗口不画系统标题栏了，界面从窗口最顶上开始，右上角只剩系统画的三个窗口按钮
+（最小化 / 最大化 / 关闭，符号颜色跟着皮肤自动深浅）。所以：
+
+- **挪窗口**：按住顶部那一条 12px 的留白、列表栏顶部的空白、或左轨图标之间的空隙都能拖。
+- **菜单**：没有标题栏就没有原生菜单栏（按 `Alt` 不出），改用左栏底部的 `⋯` 按钮弹出同一份菜单。
+  `Ctrl+I`、`F11`、`Ctrl+R` 这些加速键照旧有效。
 
 ### 悬浮窗模式（桌面版，v1.1.0 起）
 
@@ -604,6 +614,7 @@ code-atlas/
 │   ├── skins.js           皮肤表：8 套配色的名字 / 深浅 / 预览色 + 切换与跨窗口同步
 │   ├── app.js              逻辑：渲染、变量编辑、高亮、实验拓扑、工作流、全站搜索、收藏、皮肤
 │   ├── hud.js              悬浮窗交互：拖动、缩放、透明度、尺寸档位
+│   ├── win.js              无标题栏主窗口：拖动区开关 + 窗口按钮符号色跟皮肤走
 │   ├── hudnext.js          「下一步」面板：渲染、复制、候选切换（仅悬浮窗）
 │   └── styles.css          样式：8 套皮肤变量 + 悬浮窗透明层 + 响应式 + 安全区
 ├── electron/main.js        桌面外壳：app:// 协议、单实例、窗口记忆、悬浮窗、热键、菜单、日志
@@ -629,17 +640,20 @@ code-atlas/
 │   ├── shot-hud.js         悬浮窗 / 窄窗口截图回归
 │   ├── shot-next.js        「下一步」面板截图 + 探针断言
 │   ├── shot-task.js        可执行任务回归：渲染 / 改参 → 进度 / 按设备复制 / 收藏与搜索
+│   ├── win-probe.py        真屏截窗口（capturePage 拍不到系统标题栏和窗口按钮）
+│   ├── click-probe.py      真屏点一下再截，验「点得到 / 点不到」
 │   └── hud-screen-test.js  全屏 A/B 采样，验证透明窗真的透出桌面
 ├── scripts/
 │   ├── prepare-www.js      生成 www/（Android 打包用的静态资源目录）
 │   ├── make-icon.py        从 logo.png 派生 Windows 图标 + Android 自适应图标 + 启动图
+│   ├── make-doc-shots.py   重截 README 里的界面图（改完界面跑一次）
 │   └── shot-regress.py     启动打包后的成品，自己截图做回归
 ├── www/                    构建产物：给 Capacitor 的纯净静态目录（勿手改）
 ├── dist/                   构建产物：桌面 exe（勿手改）
 └── README.md
 ```
 
-加载顺序 `data.js → topics.js → search.js → ensp/*.js → javaweb/*.js → weblegacy/*.js → packs.js → native.js → nextstep.js → app.js → hud.js → hudnext.js`：各专题分片先把自己的内容并进数据层（按 id 去重、按难度排序），packs.js 再把已导入的包合进来，所以应用完全不用感知「哪些是内置、哪些是导入的」。**新增分片必须排在 packs.js 之前**，否则知识包会先合并、内置内容后合，去重就不起作用了。`nextstep.js` 放在 packs.js 之后，是因为它要在「所有内容都合完」之后才建命令词汇表。
+加载顺序 `data.js → topics.js → search.js → ensp/*.js → javaweb/*.js → weblegacy/*.js → packs.js → native.js → nextstep.js → app.js → hud.js → win.js → hudnext.js`：各专题分片先把自己的内容并进数据层（按 id 去重、按难度排序），packs.js 再把已导入的包合进来，所以应用完全不用感知「哪些是内置、哪些是导入的」。**新增分片必须排在 packs.js 之前**，否则知识包会先合并、内置内容后合，去重就不起作用了。`nextstep.js` 放在 packs.js 之后，是因为它要在「所有内容都合完」之后才建命令词汇表。
 
 **网页版零依赖零构建**，`file://` 直接打开就能跑（脚本用 `<script>` 引入，不用 fetch，无 CORS 问题）。
 `node_modules`、`electron/`、`android/` 这些都只在打包时用得上，只做网页版的话可以整块删掉。

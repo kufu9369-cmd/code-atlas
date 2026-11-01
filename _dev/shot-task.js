@@ -268,6 +268,51 @@ const CASES = [
       ['点开剧本有文档面板', r.docsOpen === true],
       ['文档标题是那个剧本', /OSPF/.test(r.docsTitle)]
     ]
+  },
+  {
+    /* 无标题栏 + 去品牌这一版最容易悄悄坏的三件事：
+       ① data-desk 没挂上 → 窗口再也拖不动（系统标题栏没了，只剩页面上的拖动区）；
+       ② 品牌块/左轨 logo 又被谁加回来 → 界面上又重复写三遍程序名；
+       ③ 拖动区盖住搜索框 → 点不进输入框。
+       都不是崩溃，肉眼也不一定发现，所以在这里钉死。 */
+    name: 'ui_clean', size: '1240x820',
+    js: `(function(){
+      var cmp = function(el){
+        if (!el) return '';
+        var s = getComputedStyle(el);
+        return s.webkitAppRegion || s.getPropertyValue('-webkit-app-region') || 'none';
+      };
+      var head = document.querySelector('.lp-head');
+      var first = head ? head.children[0] : null;
+      var rail = document.getElementById('rail');
+      var top = document.getElementById('dragTop');
+      return {
+        desk: document.documentElement.getAttribute('data-desk'),
+        dragTop: top ? getComputedStyle(top).display : 'missing',
+        brandNodes: document.querySelectorAll('.brand, .rail-logo').length,
+        headFirst: first ? String(first.className) : '',
+        headText: head ? head.textContent.trim() : 'x',
+        headDrag: cmp(head),
+        searchDrag: cmp(document.querySelector('.search')),
+        railDrag: cmp(rail),
+        railFirst: rail && rail.firstElementChild ? rail.firstElementChild.className : '',
+        menuBtn: !!document.querySelector('[data-act="menu"]'),
+        menuApi: typeof (window.DESKTOP || {}).menu,
+        title: document.title
+      };
+    })()`,
+    expect: r => [
+      ['桌面壳挂了 data-desk', r.desk === '1'],
+      ['顶部拖动条显示出来', r.dragTop === 'block'],
+      ['品牌块和左轨 logo 都已删除', r.brandNodes === 0],
+      ['顶栏第一个元素是搜索框', /search/.test(r.headFirst)],
+      ['顶栏里只剩搜索框', r.headText.length < 20],
+      ['顶栏能拖窗口', r.headDrag === 'drag'],
+      ['搜索框自己不会被拖走', r.searchDrag === 'no-drag'],
+      ['左轨能拖窗口', r.railDrag === 'drag'],
+      ['左轨第一个是专题图标', /rail-topic/.test(r.railFirst)],
+      ['底部有「⋯」菜单按钮', r.menuBtn === true && r.menuApi === 'function']
+    ]
   }
 ];
 

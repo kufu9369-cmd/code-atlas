@@ -63,6 +63,13 @@ contextBridge.exposeInMainWorld('DESKTOP', {
   showMain: () => ipcRenderer.invoke('app:show-main'),
   quit: () => ipcRenderer.send('app:quit'),
 
+  /* 无标题栏之后原生菜单栏画不出来了（见 electron/main.js 的 titleBarStyle），
+     左轨底部的「⋯」按钮用它把同一份应用菜单弹出来。 */
+  menu: () => ipcRenderer.invoke('win:menu'),
+
+  /* 右上角三个窗口按钮由系统绘制，跟着皮肤深浅改符号颜色 */
+  setOverlay: (symbolColor) => ipcRenderer.send('win:overlay', String(symbolColor || '')),
+
   /* 文件保存结果：桌面版导出配置 / 知识包时会弹「另存为」，
      页面得等主进程回报才知道用户到底存了没 —— 否则只能瞎报「已导出」，
      而实际上用户可能刚点了取消。d = { state, name, path } */

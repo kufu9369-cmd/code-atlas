@@ -15,6 +15,7 @@
     "check": "node _dev/check-all.js && node _dev/check-ensp.js && node _dev/check-recipes.js && node _dev/check-nextstep.js && node _dev/check-search.js && node _dev/check-import.js && node _dev/check-content-semantics.js && node _dev/check-export.js",
     "check:ui": "node _dev/shot-task.js",
     "icons": "python scripts/make-icon.py",
+    "docs:shots": "python scripts/make-doc-shots.py",
     "android:sync": "npm run www && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "android:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",

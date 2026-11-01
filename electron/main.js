@@ -142,6 +142,10 @@ function saveState(win) {
 
 /* ---------------- 单实例 ---------------- */
 let win = null;
+/* 应用菜单（文件 / 视图 / 帮助）。窗口没有标题栏之后菜单栏画不出来，
+   但这份菜单还得留着：① Ctrl+I、F11 这些加速键靠它生效；
+   ② 页面左轨的「⋯」按钮通过 win:menu 把它弹出来。 */
+let APP_MENU = null;
 
 /* 注意：app.quit() 是异步的，拿到锁失败之后再走 whenReady 仍然会跑一遍，
    结果是第二个实例也建了窗口再退出（日志里会多一条「启动」却没下文）。
@@ -316,13 +320,16 @@ function buildMenu() {
                 'Ctrl + = / -    放大 / 缩小',
                 'F11             全屏',
                 'F12             开发者工具',
-                'Alt             唤出菜单栏',
+                '左栏底部「⋯」   菜单（数据目录 / 运行日志 / 关于）',
+                '',
+                '窗口没有标题栏：拖顶部那一条、或者列表栏顶部的留白，都能挪窗口；',
+                '最小化 / 最大化 / 关闭在右上角。',
                 '',
                 '悬浮窗可以拖右下角任意缩放，最小 320 × 240；',
                 '窗口大小、位置、透明度都会记住。',
                 '',
                 '数据保存在本机「用户数据目录」里，升级版本不会丢；',
-                '文件 → 打开数据目录，可以手动备份。'
+                '「⋯」→ 文件 → 打开数据目录，可以手动备份。'
               ].join('\n'),
               buttons: ['知道了'],
               noLink: true
@@ -353,6 +360,9 @@ function buildMenu() {
     }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  /* 留住这份菜单：无标题栏窗口画不出原生菜单栏，页面左轨底部的「⋯」
+     按钮要通过 win:menu 把它以右键菜单的形式弹出来。 */
+  APP_MENU = Menu.getApplicationMenu();
 }
 
 /* ---------------- 截图工具（主窗口 / 悬浮窗共用） ---------------- */
@@ -747,6 +757,31 @@ function bindIpc() {
   });
 
   ipcMain.on('app:quit', () => { app.__quitting = true; app.quit(); });
+
+  /* 无标题栏窗口：窗口没标题栏就画不出原生菜单栏，
+     页面左轨底部的「⋯」按钮通过这里把同一份应用菜单弹出来。
+     菜单本身没动，所以 Ctrl+I / F11 / Ctrl+R 这些加速键还是照常生效。 */
+  ipcMain.handle('win:menu', (e) => {
+    if (!APP_MENU) { log('[win] 没有菜单可弹'); return false; }
+    log('[win] 弹出菜单');
+    const w = BrowserWindow.fromWebContents(e.sender);
+    APP_MENU.popup({ window: w || win || undefined });
+    return true;
+  });
+
+  /* 右上角那三个窗口按钮是系统画的，看不见我们的 CSS 变量：
+     换成浅色皮肤后必须把符号色改深，否则白图标压在浅底上等于隐形。 */
+  ipcMain.on('win:overlay', (_e, symbolColor) => {
+    if (!win || win.isDestroyed() || typeof win.setTitleBarOverlay !== 'function') return;
+    const c = String(symbolColor || '');
+    if (!/^#[0-9a-f]{6}$/i.test(c)) return;
+    try {
+      win.setTitleBarOverlay({ color: '#00000000', symbolColor: c, height: 40 });
+    } catch (err) {
+      log('[win] 窗口按钮配色同步失败 ' + (err && err.message));
+    }
+  });
+
   ipcMain.on('hud:alpha', (_e, v) => setHudAlpha(v));
   ipcMain.on('hud:size', (_e, w, h) => setHudSize(w, h));
 
@@ -841,6 +876,20 @@ function createWindow() {
     title: APP_NAME,
     show: false,                    // 等页面画好再显示，避免白底闪一下
     autoHideMenuBar: true,          // 菜单栏默认收起，按 Alt 唤出
+    /* 无标题栏：系统那条写着「码典 CodeAtlas · 可配置的代码大全」的深色横条
+       不再出现，页面从窗口最顶上开始画。
+       窗口按钮交给 titleBarOverlay 由系统画（右上角那一小块，透明底），
+       最小化 / 最大化 / 关闭、吸附布局、圆角都还是原生的。
+       拖动改由页面上的拖动区负责（styles.css 里的 data-desk 规则）。
+       注意：窗口没标题栏之后原生菜单栏也画不出来了，页面左轨底部的「⋯」
+       按钮负责把同一份菜单弹出来（菜单本身照旧 setApplicationMenu，
+       所以 Ctrl+I / F11 / Ctrl+R 这些加速键仍然有效）。 */
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00000000',
+      symbolColor: '#E6E8F0',       // 页面加载后由 assets/win.js 按皮肤改写
+      height: 40
+    },
     backgroundColor: '#0c0f15',
     webPreferences: {
       preload: PRELOAD,

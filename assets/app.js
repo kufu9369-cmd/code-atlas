@@ -350,6 +350,8 @@
     sun: svg('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M18.5 5.5l-1.6 1.6M7.1 16.9l-1.6 1.6"/>'),
     moon: svg('<path d="M20.2 14.2A8.5 8.5 0 0 1 9.8 3.8a8.5 8.5 0 1 0 10.4 10.4z"/>'),
     palette: svg('<path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.35 0 1.9-.95 1.45-1.95-.5-1.15.32-2.35 1.75-2.35h1.25a3.55 3.55 0 0 0 3.55-3.55c0-5.05-3.55-9.35-8-9.35z"/><circle cx="8.5" cy="9.3" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.3" cy="7.7" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.7" cy="10.2" r="1.05" fill="currentColor" stroke="none"/>'),
+    /* 三个点：桌面端顶替被去掉的系统菜单栏（数据目录 / 运行日志 / 快捷键） */
+    dots: svg('<circle cx="5.6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18.4" cy="12" r="1.5" fill="currentColor" stroke="none"/>'),
     flask: svg('<path d="M9.4 3.4v6.2L4.9 17a2.1 2.1 0 0 0 1.85 3.15h10.5A2.1 2.1 0 0 0 19.1 17l-4.5-7.4V3.4"/><path d="M8.2 3.4h7.6"/><path d="M7.3 13.8h9.4"/>'),
     pack: svg('<path d="M12 3.6v9.4M8.3 9.2l3.7 3.8 3.7-3.8"/><path d="M4.5 15.2v2.6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2.6"/>'),
     pointer: svg('<path d="M6.4 3.6l11.4 9.8-5.2.8-1.5 5.1z"/><path d="M14.2 15.5l2.8 4.2"/>'),
@@ -365,7 +367,9 @@
      ============================================================ */
   function renderRail() {
     refreshTopics();
-    let h = '<div class="rail-logo">码</div>';
+    /* 这里原来有个「码」方块 logo，跟列表栏顶部的品牌块重复；
+       系统标题栏去掉之后界面上一共三处写着「码典」，现在一处都不留。 */
+    let h = '';
 
     /* ---------- 专题大图标 ---------- */
     TOPICS.forEach(t => {
@@ -410,6 +414,12 @@
     h += '<div class="rail-grow"></div>';
     h += '<button class="skin-btn" data-skin-open aria-label="皮肤" title="皮肤 · '
       + esc(curSkin().name) + '（点一下换）">' + ICON.palette + '</button>';
+    /* 系统菜单栏跟着标题栏一起没了（无边框窗口画不出原生菜单），
+       数据目录 / 运行日志 / 快捷键 这些只能靠这里叫出来。 */
+    if (window.DESKTOP && typeof window.DESKTOP.menu === 'function') {
+      h += '<button class="skin-btn rail-menu" data-act="menu" aria-label="更多"'
+        + ' title="更多 · 数据目录 / 运行日志 / 快捷键 / 关于">' + ICON.dots + '</button>';
+    }
     h += '<div class="rail-ver">v' + esc(D.meta.version) + '</div>';
     $('#rail').innerHTML = h;
   }
@@ -2067,6 +2077,10 @@
           const r = window.DESKTOP.hud.grab ? window.DESKTOP.hud.grab() : window.DESKTOP.hud.show();
           Promise.resolve(r).then(() => toast('下一步已打开 · 下次在 eNSP 选中命令后按 Ctrl+Alt+Z')).catch(() => toast('悬浮窗打不开'));
         }
+        return;
+      }
+      if (a === 'menu') {
+        if (window.DESKTOP && window.DESKTOP.menu) window.DESKTOP.menu();
         return;
       }
       if (a === 'packs') { openPacks(); return; }
