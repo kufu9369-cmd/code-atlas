@@ -32,6 +32,7 @@
   }
   const LS = 'codeatlas.vals.v1';
   const LS_FAV = 'codeatlas.fav.v1';
+  const LS_TASK = 'codeatlas.task.v1';
 
   /* ---------- 变量存储（localStorage 持久化） ---------- */
   let VAL = {};
@@ -48,6 +49,39 @@
   }
   const favKey = (kind, id) => kind + ':' + id;
   const isFav = (kind, id) => FAV.has(favKey(kind, id));
+
+  /* ---------- 任务进度（按任务 id 存，刷新/重启后接着做） ---------- */
+  let TASK = {};
+  try { TASK = JSON.parse(localStorage.getItem(LS_TASK)) || {}; } catch (e) { TASK = {}; }
+  function taskState(id) {
+    if (!TASK[id] || typeof TASK[id] !== 'object') TASK[id] = { done: {}, verify: {} };
+    TASK[id].done = TASK[id].done || {};
+    TASK[id].verify = TASK[id].verify || {};
+    return TASK[id];
+  }
+  function persistTask() {
+    try { localStorage.setItem(LS_TASK, JSON.stringify(TASK)); return true; }
+    catch (e) { return false; }
+  }
+
+  /* 全量备份导入时恢复用户数据。导入流程结束会刷新页面，
+     这里先把值写回 localStorage，保证刷新后能接着用。 */
+  function applyUserdata(u) {
+    if (!u || typeof u !== 'object') return;
+    if (u.values && typeof u.values === 'object') {
+      VAL = u.values;
+      persist();
+    }
+    if (Array.isArray(u.favorites)) {
+      FAV = new Set(u.favorites.map(String));
+      persistFav();
+    }
+    if (u.task && typeof u.task === 'object') {
+      TASK = u.task;
+      persistTask();
+    }
+    try { renderRail(); renderList(); renderMain(); } catch (e) { /* 启动早期还没有 DOM */ }
+  }
 
   /* ---------- 皮肤 ----------
      皮肤表和切换逻辑在 assets/skins.js（单独成文件是为了命令行能验）。
@@ -265,6 +299,7 @@
     palette: svg('<path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.35 0 1.9-.95 1.45-1.95-.5-1.15.32-2.35 1.75-2.35h1.25a3.55 3.55 0 0 0 3.55-3.55c0-5.05-3.55-9.35-8-9.35z"/><circle cx="8.5" cy="9.3" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.3" cy="7.7" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.7" cy="10.2" r="1.05" fill="currentColor" stroke="none"/>'),
     flask: svg('<path d="M9.4 3.4v6.2L4.9 17a2.1 2.1 0 0 0 1.85 3.15h10.5A2.1 2.1 0 0 0 19.1 17l-4.5-7.4V3.4"/><path d="M8.2 3.4h7.6"/><path d="M7.3 13.8h9.4"/>'),
     pack: svg('<path d="M12 3.6v9.4M8.3 9.2l3.7 3.8 3.7-3.8"/><path d="M4.5 15.2v2.6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2.6"/>'),
+    pointer: svg('<path d="M6.4 3.6l11.4 9.8-5.2.8-1.5 5.1z"/><path d="M14.2 15.5l2.8 4.2"/>'),
     arrow: '<span class="ar">›</span>'
   };
 
@@ -307,6 +342,11 @@
       + ICON.layers + '<span class="tip">预设库 · ' + preN + ' 套（当前专题）</span></button>';
     h += '<button class="rail-btn' + (S.view === 'flows' ? ' on' : '') + '" data-nav="flows" data-label="流程">'
       + ICON.branch + '<span class="tip">工作流 · ' + flowN + ' 条（当前专题）</span></button>';
+    if (window.DESKTOP && window.DESKTOP.hud) {
+      h += '<button class="rail-btn rail-next" data-act="hudnext" data-label="下一步"'
+        + ' aria-label="打开下一步悬浮窗" title="下一步 · 悬浮窗（Ctrl+Alt+Z）">'
+        + ICON.pointer + '<span class="tip">下一步 · 在 eNSP 里卡住时点这里</span></button>';
+    }
     h += '<button class="rail-btn' + (S.view === 'fav' ? ' on' : '') + '" data-nav="fav" data-label="收藏">'
       + ICON.star + (FAV.size ? '<span class="dot-fav"></span>' : '')
       + '<span class="tip">收藏 · ' + FAV.size + ' 项（全站）</span></button>';
@@ -475,7 +515,7 @@
       if (showKind) tags = [SHORT[it.cat] || it.catName].concat(tags);
     } else if (kind === 'preset') {
       sub = it.summary; tags = it.features || [];
-      badge = it.steps.length + ' 步';
+      badge = (it.task ? it.task.steps.length + ' 步 · 任务' : it.steps.length + ' 步');
     } else if (kind === 'lab') {
       sub = it.goal; tags = [it.level].concat((it.topo && it.topo.nodes) ? [it.topo.nodes.length + ' 节点'] : []);
       badge = it.steps.length + ' 步 · ' + it.minutes + '′';
@@ -485,11 +525,15 @@
       sub = it.desc;
       tags = it.eg ? [it.eg] : [];
       badge = it.eg ? '' : '命令';
+    } else if (kind === 'recipe') {
+      sub = it.scene || '';
+      tags = it.tags || [];
+      badge = (it.steps || []).length + ' 步 · 剧本';
     } else {
       sub = it.summary;
       badge = Object.keys(it.nodes).filter(k => it.nodes[k].kind === 'end').length + ' 结论';
     }
-    const fav = kind !== 'cmd' && isFav(kind, it.id);
+    const fav = kind !== 'cmd' && kind !== 'recipe' && isFav(kind, it.id);
     return '<button class="card' + (on ? ' on' : '') + '" data-id="' + esc(it.id) + '" data-kind="' + kind + '">'
       + '<span class="card-t">' + hlHit(it.title)
       + (badge ? '<span class="vcount">' + esc(badge) + '</span>' : '') + '</span>'
@@ -497,7 +541,7 @@
       + '<span class="card-tags">' + tags.slice(0, 4)
         .map(t => '<span' + (kind === 'cmd' ? ' class="eg"' : '') + '>' + esc(t) + '</span>').join('')
       + '</span>'
-      + (kind === 'cmd' ? ''
+      + (kind === 'cmd' || kind === 'recipe' ? ''
         : '<span class="fav-btn' + (fav ? ' on' : '') + '" data-fav="' + esc(favKey(kind, it.id)) + '"'
           + ' role="button" aria-label="收藏">' + ICON.star + '</span>')
       + '</button>';
@@ -650,7 +694,7 @@
       if (f) rel.push('<button class="rel" data-goto-flow="' + esc(f.id) + '">流程 · ' + esc(f.title) + ICON.arrow + '</button>');
     }
     D.presets.forEach(p => {
-      if (p.steps.some(s => s.ref === item.id)) {
+      if (!p.task && (p.steps || []).some(s => s.ref === item.id)) {
         rel.push('<button class="rel" data-goto-preset="' + esc(p.id) + '">整套 · ' + esc(p.title) + ICON.arrow + '</button>');
       }
     });
@@ -685,8 +729,136 @@
       + '</div>';
   }
 
+  /* ---------------- 可执行任务（预设升级形态） ----------------
+     任务与普通预设的区别：环境参数全任务共享、步骤有明确设备归属、
+     可以勾选进度、带可勾选的验证清单。内容只存在 task.steps 一处，
+     主界面和「下一步」都从这里派生，避免两套配置走岔。 */
+  function taskEnvHTML(scope, env) {
+    return Object.keys(env).map(k => {
+      const def = env[k] || { label: k, value: '' };
+      REG[scope + '|' + k] = def;
+      const val = gv(scope, k, def.value);
+      return '<button class="own-chip" data-s="' + esc(scope) + '" data-v="' + esc(k) + '" title="点击修改">'
+        + '<span class="k">' + esc(def.label || k) + '</span>'
+        + '<span class="val">' + esc(val) + '</span>'
+        + '<span class="hint">' + esc(def.hint || '') + '</span>'
+        + '</button>';
+    }).join('');
+  }
+
+  function taskText(p, who) {
+    const t = p.task;
+    const scope = 'task:' + p.id;
+    return (t.steps || []).filter(s => !who || s.who === who)
+      .map(s => plain(scope, s.code, t.env || {})).filter(Boolean).join('\n\n');
+  }
+
+  function taskProgressHTML(p) {
+    const t = p.task, st = taskState(p.id);
+    const stepDone = Object.keys(st.done).filter(k => st.done[k]).length;
+    const verDone = Object.keys(st.verify).filter(k => st.verify[k]).length;
+    const pct = t.steps.length ? Math.round(stepDone / t.steps.length * 100) : 0;
+    return '<div class="task-prog" aria-label="任务进度">'
+      + '<div class="task-prog-top"><b>' + stepDone + ' / ' + t.steps.length + ' 步</b>'
+      + '<span>' + verDone + ' / ' + (t.verify || []).length + ' 项验证通过</span></div>'
+      + '<div class="task-bar"><i style="width:' + pct + '%"></i></div></div>';
+  }
+
+  function taskHTML(p) {
+    const t = p.task;
+    const scope = 'task:' + p.id;
+    const st = taskState(p.id);
+    const devs = t.devices || [];
+    const known = new Set(devs.map(d => d.id));
+
+    const groups = devs.map(d => ({
+      id: d.id, role: d.role || '', note: d.note || '',
+      steps: t.steps.map((s, i) => ({ s, i })).filter(x => x.s.who === d.id)
+    }));
+    t.steps.forEach((s, i) => {
+      if (!known.has(s.who)) groups.push({ id: s.who || '通用', role: '', note: '', steps: [{ s, i }] });
+    });
+
+    const stepHTML = groups.filter(g => g.steps.length).map(g =>
+      '<section class="task-dev" data-task-dev="' + esc(g.id) + '">'
+      + '<div class="task-dev-h"><div><b>' + esc(g.id) + '</b>'
+      + (g.role ? '<span class="task-role">' + esc(g.role) + '</span>' : '')
+      + (g.note ? '<span class="task-wire">' + esc(g.note) + '</span>' : '') + '</div>'
+      + '<button class="btn ghost task-dev-copy" data-act="taskcopy" data-who="' + esc(g.id) + '">'
+      + ICON.copy + '复制 ' + esc(g.id) + ' 全部</button></div>'
+      + g.steps.map(({ s, i }) => {
+        const done = !!st.done[i];
+        return '<div class="task-step' + (done ? ' done' : '') + '">'
+          + '<div class="pstep-h">'
+          + '<button class="task-check' + (done ? ' on' : '') + '" data-task-step="' + i + '"'
+          + ' aria-pressed="' + (done ? 'true' : 'false') + '" aria-label="标记第 ' + (i + 1) + ' 步完成">✓</button>'
+          + '<span class="idx">' + (i + 1) + '</span>'
+          + '<span class="t">' + esc(s.title) + '</span>'
+          + '<span class="task-who">' + esc(s.who || '通用') + '</span>'
+          + '<button class="go" data-act="taskcopy" data-step="' + i + '">复制本步 ›</button>'
+          + '</div>'
+          + (s.note ? '<div class="step-note">' + esc(s.note) + '</div>' : '')
+          + '<div class="codewrap"><div class="code-h">'
+          + '<span class="dots"><i></i><i></i><i></i></span>'
+          + '<span class="fname">' + esc(String(s.who || 'task').toLowerCase()) + '_' + (i + 1) + '.cfg</span>'
+          + '<span class="legend"><span class="own-sm">自主</span> 改一次，全任务同步</span>'
+          + '</div><pre class="code"><code>' + renderCode(scope, s.code, t.env || {}, true) + '</code></pre></div>'
+          + '</div>';
+      }).join('')
+      + '</section>').join('');
+
+    const plan = Array.isArray(t.plan) && t.plan.length
+      ? '<div class="section-h">设备与连接</div><div class="plan-wrap"><table class="plan-t"><thead><tr>'
+        + (t.planHead || ['设备', '角色', '接口', '说明']).map(x => '<th>' + esc(x) + '</th>').join('')
+        + '</tr></thead><tbody>'
+        + t.plan.map(r => '<tr><td class="d">' + esc(r.dev) + '</td><td class="i">' + esc(r.intf || '') + '</td>'
+          + '<td class="a">' + esc(r.ip || '') + '</td><td class="n">' + esc(r.note || '') + '</td></tr>').join('')
+        + '</tbody></table></div>'
+      : '';
+
+    const verify = (t.verify || []).length
+      ? '<div class="section-h">验证：逐项确认</div><div class="vlist task-verify">'
+      + t.verify.map((v, i) => {
+        const done = !!st.verify[i];
+        return '<div class="vitem task-v' + (done ? ' done' : '') + '">'
+          + '<div class="task-v-h">'
+          + '<button class="task-check' + (done ? ' on' : '') + '" data-task-verify="' + i + '"'
+          + ' aria-pressed="' + (done ? 'true' : 'false') + '" aria-label="标记验证 ' + (i + 1) + ' 通过">✓</button>'
+          + (v.who ? '<span class="task-who">' + esc(v.who) + '</span>' : '')
+          + '<code class="vcmd">' + renderCode(scope, v.cmd, t.env || {}, true) + '</code></div>'
+          + '<span class="vhope">' + esc(v.hope) + '</span></div>';
+      }).join('') + '</div>'
+      : '';
+
+    return '<div class="detail task">'
+      + backBtn()
+      + '<div class="crumb"><span>任务</span><span class="sep">/</span><span class="cur">可执行方案</span></div>'
+      + '<h1 class="title">' + esc(p.title) + '</h1>'
+      + '<p class="lede">' + esc(p.summary) + '</p>'
+      + '<div class="chiprow"><span class="chip mint">' + t.steps.length + ' 步</span>'
+      + '<span class="chip">' + devs.length + ' 台设备</span>'
+      + '<span class="chip">' + (t.verify || []).length + ' 项验证</span>'
+      + (p.features || []).map(f => '<span class="chip">' + esc(f) + '</span>').join('') + '</div>'
+      + '<div class="toolbar task-toolbar"><div class="acts" style="margin-left:0;width:100%">'
+      + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="taskreset">恢复未开始</button>'
+      + '<span class="task-saved">进度自动保存在本机</span>'
+      + '</div></div>'
+      + taskProgressHTML(p)
+      + '<div class="section-h">任务参数<span class="n">改一次，所有设备同步</span></div>'
+      + '<div class="owns-grid task-env">' + taskEnvHTML(scope, t.env || {}) + '</div>'
+      + plan
+      + '<div class="section-h">按设备执行</div>'
+      + '<div class="task-steps">' + stepHTML + '</div>'
+      + verify
+      + (p.docs && p.docs.secs ? '<div class="section-h">为什么这样配</div>'
+        + p.docs.secs.map(s => '<div class="task-doc"><b>' + esc(s.h) + '</b><p>' + esc(s.p) + '</p></div>').join('') : '')
+      + '</div>';
+  }
+
   /* ---------------- 预设详情 ---------------- */
   function presetHTML(p) {
+    if (p.task) return taskHTML(p);
     const body = p.steps.map((st, i) => {
       const snip = ITEMS[st.ref];
       if (!snip) return '';
@@ -696,6 +868,7 @@
         + '<div class="pstep-h"><span class="idx">' + (i + 1) + '</span>'
         + '<span class="t">' + esc(snip.title) + '</span>'
         + (st.note ? '<span class="note">· ' + esc(st.note) + '</span>' : '')
+        + '<button class="go" data-act="presetstepcopy" data-i="' + i + '">复制本步 ›</button>'
         + '<button class="go" data-goto-snippet="' + esc(snip.id) + '">单条查看 ›</button></div>'
         + '<div class="codewrap"><div class="code-h">'
         + '<span class="dots"><i></i><i></i><i></i></span>'
@@ -718,9 +891,9 @@
       + (p.scene ? '<p class="lede" style="margin-top:12px;font-size:12.5px;color:var(--tx-3)">适用场景：' + esc(p.scene) + '</p>' : '')
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
-      + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制整套配置</button>'
+      + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
       + '</div></div>'
-      + '<div class="legendbar"><span class="swatch"></span>每一块琥珀色都是独立的自主配置区，改完可以逐段复制</div>'
+      + '<div class="legendbar"><span class="swatch"></span>每一块琥珀色都是独立的自主配置区；多设备任务请按步骤复制</div>'
       + '<div style="margin-top:18px">' + body + '</div>'
       + '</div>';
   }
@@ -789,6 +962,7 @@
       return '<div class="pstep">'
         + '<div class="pstep-h"><span class="idx">' + (i + 1) + '</span>'
         + '<span class="t">' + esc(st.title) + '</span>'
+        + '<button class="go" data-act="labstepcopy" data-i="' + i + '">复制本步 ›</button>'
         + (refSnip ? '<button class="go" data-goto-snippet="' + esc(refSnip.id) + '">单条查看 ›</button>' : '')
         + '</div>'
         + (st.note ? '<div class="step-note">' + esc(st.note) + '</div>' : '')
@@ -839,7 +1013,7 @@
       + '</div>'
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
-      + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制整套配置</button>'
+      + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
       + '</div></div>'
       + (l.topo && l.topo.nodes && l.topo.nodes.length
         ? '<figure class="topo-wrap" data-act="topozoom"><div class="topo-scroll">' + topoSVG(l.topo) + '</div>'
@@ -910,15 +1084,16 @@
     openDocs({ kind: 'cmd', word: word });
   }
   function openCurrentDocs() {
-    if (S.view === 'cat') {
+    const view = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    if (view === 'cat') {
       const it = ITEMS[S.sel.cat];
       if (it) openDocs({ kind: 'item', item: it, name: it.catName });
-    } else if (S.view === 'labs') {
+    } else if (view === 'labs') {
       const l = (D.labs || []).find(x => x.id === S.sel.labs);
       if (l) openDocs({ kind: 'item', item: l, name: '实验 · ' + l.title });
-    } else if (S.view === 'presets') {
+    } else if (view === 'presets') {
       const p = D.presets.find(x => x.id === S.sel.presets);
-      if (p) openDocs({ kind: 'item', item: p, name: '预设库 · 整套配置' });
+      if (p) openDocs({ kind: 'item', item: p, name: (p.task ? '任务 · ' : '预设库 · ') + p.title });
     }
   }
 
@@ -955,6 +1130,25 @@
         extra = '<button class="go-snippet" data-goto-snippet="' + esc(d.node.snippet) + '">打开配置片段 · '
           + esc(sn ? sn.title : d.node.snippet) + ' ' + ICON.arrow + '</button>';
       }
+    } else if (d.kind === 'recipe') {
+      const r = d.recipe;
+      kicker = '配置剧本';
+      title = r.title;
+      secs = [];
+      if (r.scene) secs.push({ h: '适用场景', p: r.scene });
+      secs.push({
+        h: '完整步骤',
+        code: (r.steps || []).map((s, i) => (s.who ? '[' + s.who + '] ' : '')
+          + (i + 1) + '. ' + s.c + (s.note ? '    # ' + s.note : '')).join('\n')
+      });
+      if ((r.verify || []).length) {
+        secs.push({
+          h: '配完怎么验',
+          ul: r.verify.map(v => v.cmd + (v.hope ? ' → ' + v.hope : ''))
+        });
+      }
+      extra = '<div class="docs-note">这是“下一步”悬浮窗使用的同一份剧本。'
+        + '在桌面端选中 eNSP 里的命令后按快捷键，就能接着往下配。</div>';
     }
 
     const body = secs.map(s => '<div class="dsec"><h3>' + esc(s.h) + '</h3>'
@@ -988,6 +1182,7 @@
     if (st.labs) bits.push(st.labs + ' 实验');
     if (st.presets) bits.push(st.presets + ' 预设');
     if (st.flows) bits.push(st.flows + ' 工作流');
+    if (st.recipes) bits.push(st.recipes + ' 剧本');
     if (st.cmd) bits.push(st.cmd + ' 命令词');
     return bits.join(' · ') || '空包';
   }
@@ -1218,7 +1413,8 @@
         '已导入《' + p.name + '》' + (res.replaced ? '（覆盖旧版本）' : '') + '：' + packStatLine({
           snippets: (p.cats || []).reduce((a, c) => a + c.items.length, 0),
           labs: (p.labs || []).length, presets: (p.presets || []).length,
-          flows: (p.flows || []).length, cmd: Object.keys(p.cmd || {}).length
+          flows: (p.flows || []).length, recipes: (p.recipes || []).length,
+          cmd: Object.keys(p.cmd || {}).length
         }));
     } catch (e) { /* 忽略 */ }
     if (hash) { try { history.replaceState(null, '', hash); } catch (e) { location.hash = hash; } }
@@ -1349,34 +1545,35 @@
      复制
      ============================================================ */
   function currentText() {
-    if (S.view === 'cat') {
+    const view = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    if (view === 'cat') {
       const it = ITEMS[S.sel.cat];
       if (!it) return '';
       const cd = codeDef(it);
       return plain(it.id, cd.code, cd.vars);
     }
-    if (S.view === 'labs') {
+    if (view === 'labs') {
       const l = (D.labs || []).find(x => x.id === S.sel.labs);
       if (!l) return '';
-      return (l.steps || []).map((st, i) => '# ---- ' + (i + 1) + '. ' + st.title + ' ----\n'
-        + plain('lab:' + l.id, st.code, l.vars || {})).join('\n\n');
+      return (l.steps || []).map(st => plain('lab:' + l.id, st.code, l.vars || {}))
+        .filter(Boolean).join('\n\n');
     }
-    if (S.view === 'presets') {
+    if (view === 'presets') {
       const p = D.presets.find(x => x.id === S.sel.presets);
       if (!p) return '';
+      if (p.task) return taskText(p, p.task.devices[0] && p.task.devices[0].id);
       return p.steps.map((st, i) => {
         const snip = ITEMS[st.ref];
         if (!snip) return '';
         const vars = presetVars(snip, st.vars);
-        return '# ---- ' + (i + 1) + '. ' + snip.title + (st.note ? ' · ' + st.note : '') + ' ----\n'
-          + plain('p:' + p.id + ':' + i, snip.code, vars);
-      }).join('\n\n');
+        return plain('p:' + p.id + ':' + i, snip.code, vars);
+      }).filter(Boolean).join('\n\n');
     }
     return '';
   }
 
   async function copyText(txt) {
-    if (!txt) return;
+    if (!txt) { toast('当前没有可复制的内容'); return; }
     let ok = false;
     try {
       if (navigator.clipboard && window.isSecureContext) {
@@ -1529,6 +1726,11 @@
       /* 命令卡片不是「内容条目」，没有可切换的主面板，
          点开就直接给命令词典弹层，别把当前片段顶掉。 */
       if (kind === 'cmd') { openDocs({ kind: 'cmd', word: id }); return; }
+      if (kind === 'recipe') {
+        const r = (D.recipes || []).find(x => x.id === id);
+        if (r) openDocs({ kind: 'recipe', recipe: r });
+        return;
+      }
       if (S.view !== 'fav') {
         if (kind === 'snippet') {
           S.view = 'cat';
@@ -1553,6 +1755,36 @@
       renderRail(); renderList(); renderMain();
       $('#mainScroll').scrollTop = 0;
       if (window.innerWidth <= 860) document.body.classList.add('detail');
+      return;
+    }
+
+    /* 任务步骤 / 验证勾选 */
+    const tstep = t.closest('[data-task-step]');
+    if (tstep) {
+      const p = D.presets.find(x => x.id === S.sel.presets);
+      if (p && p.task) {
+        const i = Number(tstep.dataset.taskStep);
+        const st = taskState(p.id);
+        st.done[i] = !st.done[i];
+        if (!persistTask()) toast('进度保存失败：浏览器存储不可用');
+        const sc = $('#mainScroll').scrollTop;
+        renderMain();
+        $('#mainScroll').scrollTop = sc;
+      }
+      return;
+    }
+    const tver = t.closest('[data-task-verify]');
+    if (tver) {
+      const p = D.presets.find(x => x.id === S.sel.presets);
+      if (p && p.task) {
+        const i = Number(tver.dataset.taskVerify);
+        const st = taskState(p.id);
+        st.verify[i] = !st.verify[i];
+        if (!persistTask()) toast('进度保存失败：浏览器存储不可用');
+        const sc = $('#mainScroll').scrollTop;
+        renderMain();
+        $('#mainScroll').scrollTop = sc;
+      }
       return;
     }
 
@@ -1603,6 +1835,13 @@
     const act = t.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
+      if (a === 'hudnext') {
+        if (window.DESKTOP && window.DESKTOP.hud) {
+          const r = window.DESKTOP.hud.grab ? window.DESKTOP.hud.grab() : window.DESKTOP.hud.show();
+          Promise.resolve(r).then(() => toast('下一步已打开 · 下次在 eNSP 选中命令后按 Ctrl+Alt+Z')).catch(() => toast('悬浮窗打不开'));
+        }
+        return;
+      }
       if (a === 'packs') { openPacks(); return; }
       if (a === 'packclose') { closePacks(); return; }
       if (a === 'packcheck') { runPackCheck(); return; }
@@ -1621,6 +1860,45 @@
         if (!window.confirm('删除知识包《' + (p ? p.name : id) + '》？\n里面的内容会从应用里移除，页面随后刷新。')) return;
         window.PACKS.remove(id);
         location.reload();
+        return;
+      }
+      if (a === 'taskcopy') {
+        const p = D.presets.find(x => x.id === S.sel.presets);
+        if (!p || !p.task) return;
+        const scope = 'task:' + p.id;
+        if (act.dataset.who) copyText(taskText(p, act.dataset.who));
+        else {
+          const i = Number(act.dataset.step);
+          const step = p.task.steps[i];
+          if (step) copyText(plain(scope, step.code, p.task.env || {}));
+        }
+        return;
+      }
+      if (a === 'labstepcopy') {
+        const l = (D.labs || []).find(x => x.id === S.sel.labs);
+        const i = Number(act.dataset.i);
+        const st = l && l.steps && l.steps[i];
+        if (st) copyText(plain('lab:' + l.id, st.code, l.vars || {}));
+        return;
+      }
+      if (a === 'presetstepcopy') {
+        const p = D.presets.find(x => x.id === S.sel.presets);
+        const i = Number(act.dataset.i);
+        const st = p && p.steps && p.steps[i];
+        const snip = st && ITEMS[st.ref];
+        if (snip) copyText(plain('p:' + p.id + ':' + i, snip.code, presetVars(snip, st.vars)));
+        return;
+      }
+      if (a === 'taskreset') {
+        const p = D.presets.find(x => x.id === S.sel.presets);
+        if (!p || !p.task) return;
+        if (!window.confirm('清空《' + p.title + '》的勾选进度？\n参数值会保留，只重置步骤和验证状态。')) return;
+        TASK[p.id] = { done: {}, verify: {} };
+        persistTask();
+        const sc = $('#mainScroll').scrollTop;
+        renderMain();
+        $('#mainScroll').scrollTop = sc;
+        toast('任务进度已重置');
         return;
       }
       if (a === 'copy') { copyText(currentText()); return; }
@@ -1758,10 +2036,15 @@
 
   window.CodeAtlas = {
     S, D, gotoView, gotoTopic, gotoSnippet, gotoFlow, gotoPreset, gotoLab,
+    currentText,
     toggleFav, applySkin, openSkins, closeSkins, searchGroups, favGroups,
+    taskState, taskText, applyUserdata,
     openPacks, closePacks, runPackCheck, doPackInstall,
     closeDocs, closePop,
     get FAV() { return FAV; },
+    get favorites() { return [...FAV]; },
+    get values() { return Object.assign({}, VAL); },
+    get taskProgress() { return JSON.parse(JSON.stringify(TASK)); },
     get PACKS() { return window.PACKS; }
   };
 

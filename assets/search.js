@@ -89,10 +89,34 @@
   }
 
   function genericScore(it, toks) {
+    if (it.task) {
+      /* 任务要按“我当前要做什么”来搜：参数名、每步标题/命令、
+         验证命令都要进索引，否则搜「DHCP 地址池」找不到已经有的任务。 */
+      return scoreOf([
+        [it.title, 3.2],
+        [(it.features || []).join(' '), 1.6],
+        [it.summary, 1.3],
+        [Object.keys(it.task.env || {}).join(' '), 1.4],
+        [(it.task.steps || []).map(function (s) { return (s.title || '') + ' \n ' + (s.code || ''); }).join(' \n '), 1.2],
+        [(it.task.verify || []).map(function (v) { return (v.cmd || '') + ' ' + (v.hope || ''); }).join(' \n '), 1.0]
+      ], toks);
+    }
     return scoreOf([
       [it.title, 3.2],
       [(it.features || []).join(' '), 1.6],
       [it.summary, 1.3]
+    ], toks);
+  }
+
+  function recipeScore(it, toks) {
+    return scoreOf([
+      [it.title, 3.4],
+      [(it.tags || []).join(' '), 1.8],
+      [it.scene, 1.5],
+      [(it.steps || []).map(function (s) {
+        return (s.c || '') + ' \n ' + (s.note || '');
+      }).join(' \n '), 1.2],
+      [(it.verify || []).map(function (v) { return (v.cmd || '') + ' ' + (v.hope || ''); }).join(' \n '), 1.0]
     ], toks);
   }
 
@@ -193,6 +217,8 @@
     if (ps.length) gs.push({ kind: 'preset', name: '预设库', items: ps });
     var fs = ranked(D.flows || [], genericScore, toks);
     if (fs.length) gs.push({ kind: 'flow', name: '工作流', items: fs });
+    var rs = ranked(D.recipes || [], recipeScore, toks);
+    if (rs.length) gs.push({ kind: 'recipe', name: '配置剧本', items: rs.slice(0, 20), total: rs.length });
 
     return gs;
   }
@@ -202,6 +228,8 @@
     scoreText: scoreText,
     scoreOf: scoreOf,
     snippetScore: snippetScore,
+    genericScore: genericScore,
+    recipeScore: recipeScore,
     labScore: labScore,
     genericScore: genericScore,
     cmdScore: cmdScore,

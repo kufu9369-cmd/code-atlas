@@ -106,13 +106,28 @@ let topoNodeCount = 0;
   (l.plan || []).forEach(function (r) { if (!r.dev) warns.push('lab ' + l.id + ' plan 有行没写 dev'); });
 });
 
-/* ---------- 4. 预设 ---------- */
+/* ---------- 4. 预设 / 可执行任务 ---------- */
 (D.presets || []).forEach(function (p) {
-  if (!(p.steps || []).length) errors.push('preset ' + p.id + ' 没有步骤');
-  (p.steps || []).forEach(function (s, i) {
-    if (!s.ref) errors.push('preset ' + p.id + ' steps[' + i + '] 缺少 ref');
-    else if (!snipIds[s.ref]) errors.push('preset ' + p.id + ' steps[' + i + '] 引用不存在的片段：' + s.ref);
-  });
+  if (p.task) {
+    const t = p.task, where = 'task ' + p.id, env = t.env || {}, devIds = {};
+    (t.devices || []).forEach(function (d) { if (d.id) devIds[d.id] = 1; else errors.push(where + ' 设备缺少 id'); });
+    if (!(t.steps || []).length) errors.push(where + ' 没有步骤');
+    (t.steps || []).forEach(function (s, i) {
+      if (!s.code) errors.push(where + ' steps[' + i + '] 缺少 code');
+      if (!s.who || !devIds[s.who]) errors.push(where + ' steps[' + i + '] 设备未声明：' + s.who);
+      varCount += checkVars(s.code, env, where + '/step' + i);
+    });
+    (t.verify || []).forEach(function (v, i) {
+      if (!v.cmd || !v.hope) errors.push(where + ' verify[' + i + '] 缺少 cmd / hope');
+      if (v.cmd) varCount += checkVars(v.cmd, env, where + '/verify' + i);
+    });
+  } else {
+    if (!(p.steps || []).length) errors.push('preset ' + p.id + ' 没有步骤');
+    (p.steps || []).forEach(function (s, i) {
+      if (!s.ref) errors.push('preset ' + p.id + ' steps[' + i + '] 缺少 ref');
+      else if (!snipIds[s.ref]) errors.push('preset ' + p.id + ' steps[' + i + '] 引用不存在的片段：' + s.ref);
+    });
+  }
   if (!p.summary) warns.push('preset ' + p.id + ' 没有 summary');
 });
 

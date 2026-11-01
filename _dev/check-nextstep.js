@@ -15,6 +15,11 @@
 'use strict';
 
 global.window = {};
+global.localStorage = {
+  _v: {},
+  getItem: function (k) { return Object.prototype.hasOwnProperty.call(this._v, k) ? this._v[k] : null; },
+  setItem: function (k, v) { this._v[k] = String(v); }
+};
 require('../assets/data.js');
 require('../assets/topics.js');
 ['00-base', '10-basic', '20-adv', '30-pro', '40-labs', '50-presets-flows',
@@ -38,10 +43,9 @@ function ok(name, cond, extra) {
   }
 }
 
-/* 从 from 开始，跳过 quit 这类导航命令后的第一条真命令 */
+/* 下一条必须严格等于剧本顺序；quit 也是切换视图所必需的步骤。 */
 function nextReal(steps, from) {
-  for (let i = from; i < steps.length; i++) if (!NAV.test(steps[i].c)) return steps[i].c;
-  return null;
+  return from < steps.length ? steps[from].c : null;
 }
 
 /* ---------- 1. 视图识别 ---------- */
@@ -231,6 +235,18 @@ console.log('\n=== 5. 真实场景 ===');
     r.ok ? r.recipe.id + ' → ' + r.next[0].c : '未匹配');
 }
 {
+  /* 还没退出接口视图时，quit 是必须执行的真实下一步。 */
+  const r = NEXT.match([
+    'vlan batch 10 20',
+    'interface GigabitEthernet0/0/1',
+    'port link-type access',
+    'port default vlan 10'
+  ].join('\n'));
+  ok('接口配置完成后先提示 quit，不跳到下一台接口',
+    r.ok && r.next.length > 0 && /^quit$/i.test(r.next[0].c),
+    r.ok ? r.next[0].c : '未匹配');
+}
+{
   /* 最后一条是 quit：不应该再提示 quit */
   const r = NEXT.match([
     'vlan batch 10 20',
@@ -250,6 +266,36 @@ console.log('\n=== 5. 真实场景 ===');
   const multi = NEXT.match('vrrp vrid 10 priority 120');
   ok('跨设备的剧本分成两块（CORE1 / CORE2）', multi.ok && multi.parts.length === 2,
     multi.ok ? multi.parts.map(function (p) { return p.who; }).join('/') : '-');
+}
+
+/* ---------- 6. 可执行任务与主界面共用环境 ---------- */
+console.log('\n=== 6. 可执行任务 ===');
+{
+  const id = 'task:preset-l3-office';
+  const all = NEXT.recipes();
+  const task = all.find(function (r) { return r.id === id; });
+  ok('任务已进入下一步引擎', !!task, id);
+  ok('任务按设备拆分', task && new Set(task.steps.map(function (s) { return s.who; })).size >= 3,
+    task ? Array.from(new Set(task.steps.map(function (s) { return s.who; }))).join('/') : '-');
+
+  localStorage.setItem('codeatlas.vals.v1', JSON.stringify({
+    'task:preset-l3-office|vlanId': '30',
+    'task:preset-l3-office|vlanName': 'rd',
+    'task:preset-l3-office|gateway': '192.168.30.1',
+    'task:preset-l3-office|lanNetwork': '192.168.30.0',
+    'task:preset-l3-office|lanMask': '255.255.255.0',
+    'task:preset-l3-office|wildcard': '0.0.0.255',
+    'task:preset-l3-office|swUplink': '10.0.30.1',
+    'task:preset-l3-office|r1Lan': '10.0.30.2',
+    'task:preset-l3-office|wanIp': '200.1.30.1',
+    'task:preset-l3-office|wanGw': '200.1.30.2'
+  }));
+  const r = NEXT.match('system-view\nsysname SW1\nvlan batch 30\nvlan 30', id);
+  ok('任务参数改 VLAN 30 后，下一步读取同一环境',
+    r.ok && r.next[0] && /rd|quit/.test(r.next[0].c), r.ok ? r.next[0].c : '未匹配');
+  const open = NEXT.openRecipe(id);
+  ok('任务可独立打开，步骤和验证都在', !!open && open.total > 10 && open.verify.length >= 4,
+    open ? open.total + ' 步 / ' + open.verify.length + ' 验证' : '-');
 }
 
 /* ---------- 汇总 ---------- */

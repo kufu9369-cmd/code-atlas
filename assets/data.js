@@ -36,7 +36,7 @@ window.CODEATLAS = {
   meta: {
     name: '码典',
     en: 'CodeAtlas',
-    version: '1.1.4',
+    version: '1.1.5',
     tagline: '可配置的代码大全'
   },
 
@@ -1615,7 +1615,7 @@ import pathlib
 path = pathlib.Path("{{path}}")
 cfg = json.loads(path.read_text(encoding="utf-8"))
 
-cfg["{{key}}"] = {{value}}
+cfg["{{key}}"] = json.loads(r"""{{value}}""")
 
 path.write_text(
     json.dumps(cfg, ensure_ascii=False, indent=2),
@@ -1690,6 +1690,9 @@ df = df.dropna(how="all").dropna(axis=1, how="all")
 print("行数", len(df))
 print("列名", list(df.columns))
 print(df.head({{rows}}))
+
+# dtype=str 保住了工号/身份证的前导零；要计算的列必须显式转成数值
+df["{{valueCol}}"] = pd.to_numeric(df["{{valueCol}}"], errors="raise")
 
 # 按某一列汇总
 print(df.groupby("{{groupCol}}")["{{valueCol}}"].agg(["count", "sum"]))`,
@@ -1900,21 +1903,117 @@ git rebase --abort`,
     {
       id: 'preset-l3-office',
       title: '小型办公网三层互通',
-      summary: 'SVI 起网关 + DHCP 自动分配 + OSPF 学路由 + NAT 出公网。从二层到能上网，一套打通。',
-      features: ['VLANIF 网关', 'DHCP 自动分配', 'OSPF 动态路由', 'Easy IP 出口'],
+      summary: '一次填写 VLAN、网段和出口地址，按 SW1 / AR1 / PC1 分别执行；每一步可勾选，验证清单可逐项确认。',
+      features: ['一次填参', '按设备执行', '验证清单', '进度自动保存'],
       scene: '一台三层交换机做核心，一台路由器出口。终端自动获取地址并能访问互联网。',
-      steps: [
-        { ref: 'vlan-create', vars: { vlanId: '10', vlanName: 'office' }, note: '业务 VLAN' },
-        { ref: 'svi', vars: { vlanId: '10', gateway: '192.168.10.1', mask: '255.255.255.0' }, note: '起网关' },
-        { ref: 'dhcp-pool', vars: { poolName: 'vlan10', network: '192.168.10.0', mask: '255.255.255.0', gateway: '192.168.10.1' }, note: '自动分配地址' },
-        { ref: 'ospf', vars: { pid: '1', rid: '10.0.0.1', area: '0', net: '192.168.10.0', wildcard: '0.0.0.255' }, note: '和出口路由器学路由' },
-        { ref: 'static-route', vars: { dest: '0.0.0.0', mask: '0.0.0.0', nextHop: '10.0.0.2' }, note: '默认路由指向出口' },
-        { ref: 'nat-easyip', vars: { aclNum: '2000', inside: '192.168.10.0', wildcard: '0.0.0.255', outside: 'GigabitEthernet0/0/0' }, note: '出口做 NAT' }
-      ],
+      task: {
+        env: {
+          vlanId: { label: '业务 VLAN', value: '10', type: 'int', min: 2, max: 4094, hint: '2–4094', desc: '办公终端所属 VLAN，SW1 的所有相关配置会同步更新。' },
+          vlanName: { label: 'VLAN 名称', value: 'office', type: 'text', hint: '建议英文', desc: '给 VLAN 起一个能看懂的名字，排障时 display vlan 更直观。' },
+          gateway: { label: '终端网关', value: '192.168.10.1', type: 'text', hint: 'VLANIF 地址', desc: '终端默认网关，也是 SW1 上 VLANIF 的地址。' },
+          lanNetwork: { label: '终端网段', value: '192.168.10.0', type: 'text', hint: '网络地址', desc: 'DHCP 地址池、OSPF 宣告和 NAT ACL 共用这个网段。' },
+          lanMask: { label: '子网掩码', value: '255.255.255.0', type: 'text', hint: '完整掩码', desc: '接口地址和 DHCP 地址池共用。' },
+          wildcard: { label: '反掩码', value: '0.0.0.255', type: 'text', hint: 'OSPF / ACL 用', desc: 'OSPF 宣告和 NAT ACL 必须写反掩码。' },
+          swUplink: { label: 'SW1 上联地址', value: '10.0.0.1', type: 'text', hint: 'SW1 侧 /30', desc: 'SW1 与 AR1 互联地址，同时用作 SW1 的 Router ID。' },
+          r1Lan: { label: 'AR1 内网地址', value: '10.0.0.2', type: 'text', hint: 'AR1 侧 /30', desc: 'SW1 的默认路由下一跳，也是 AR1 的内网接口地址。' },
+          wanIp: { label: 'AR1 公网地址', value: '200.1.1.1', type: 'text', hint: '模拟运营商侧', desc: '出口接口地址，Easy IP 会把它作为 NAT 转换地址。' },
+          wanGw: { label: '运营商网关', value: '200.1.1.2', type: 'text', hint: '默认路由下一跳', desc: 'AR1 访问互联网的下一跳。' }
+        },
+        devices: [
+          { id: 'SW1', role: '核心交换 / 网关 / DHCP', note: 'Ge0/0/1 接 PC1，Ge0/0/24 接 AR1' },
+          { id: 'AR1', role: '出口路由 / NAT', note: 'Ge0/0/0 接 SW1，Ge0/0/1 接运营商' },
+          { id: 'PC1', role: '终端', note: '网卡设为 DHCP，接 SW1 的 Ge0/0/1' }
+        ],
+        planHead: ['设备', '角色', '接口 / 连接'],
+        plan: [
+          { dev: 'SW1', intf: '核心', ip: 'Ge0/0/1 接 PC1', note: 'VLANIF 网关 + DHCP + 默认路由' },
+          { dev: 'SW1', intf: '上联', ip: 'Ge0/0/24 → AR1 Ge0/0/0', note: '10.0.0.1/30，跑 OSPF' },
+          { dev: 'AR1', intf: '内网', ip: 'Ge0/0/0 → SW1', note: '10.0.0.2/30，跑 OSPF' },
+          { dev: 'AR1', intf: '公网', ip: 'Ge0/0/1 → ISP', note: '200.1.1.1/30，做 Easy IP' },
+          { dev: 'PC1', intf: '终端', ip: 'DHCP 自动获取', note: '网关指向 192.168.10.1' }
+        ],
+        steps: [
+          { who: 'SW1', title: '创建业务 VLAN', note: '先建容器，后面的接口和网关才有地方落。',
+            code: `system-view
+sysname SW1
+vlan batch {{vlanId}}
+vlan {{vlanId}}
+ description {{vlanName}}
+ quit` },
+          { who: 'SW1', title: '把接入口划进 VLAN', note: 'PC1 接在 Ge0/0/1。其他办公口按同样的方式加入。',
+            code: `interface GigabitEthernet0/0/1
+ port link-type access
+ port default vlan {{vlanId}}
+ quit` },
+          { who: 'SW1', title: '配置终端网关', note: 'VLANIF 是三层交换机的网关接口，地址必须和终端同网段。',
+            code: `interface Vlanif{{vlanId}}
+ ip address {{gateway}} {{lanMask}}
+ quit` },
+          { who: 'SW1', title: '开启 DHCP', note: '地址池、网关、DNS 一次配好；终端改成自动获取就能拿到地址。',
+            code: `dhcp enable
+ip pool vlan{{vlanId}}
+ network {{lanNetwork}} mask {{lanMask}}
+ gateway-list {{gateway}}
+ dns-list 114.114.114.114
+ quit
+interface Vlanif{{vlanId}}
+ dhcp select global
+ quit` },
+          { who: 'SW1', title: '配置上联与默认路由', note: 'SW1 到 AR1 用 /30 互联；不知道目的地的流量交给 AR1。',
+            code: `interface GigabitEthernet0/0/24
+ ip address {{swUplink}} 255.255.255.252
+ quit
+ip route-static 0.0.0.0 0.0.0.0 {{r1Lan}}` },
+          { who: 'SW1', title: 'OSPF 宣告内网', note: '只宣告终端网段和互联网段；反掩码写错是 OSPF 第一大坑。',
+            code: `ospf 1 router-id {{swUplink}}
+ area 0
+  network {{lanNetwork}} {{wildcard}}
+  network 10.0.0.0 0.0.0.3
+  quit
+ quit` },
+          { who: 'AR1', title: '配置内外网接口', note: '内网口与 SW1 同网段，公网口模拟运营商侧。',
+            code: `system-view
+sysname AR1
+interface GigabitEthernet0/0/0
+ ip address {{r1Lan}} 255.255.255.252
+ quit
+interface GigabitEthernet0/0/1
+ ip address {{wanIp}} 255.255.255.252
+ quit` },
+          { who: 'AR1', title: 'OSPF 对接核心', note: '只宣告互联 /30，终端网段由 SW1 自己宣告。',
+            code: `ospf 1 router-id {{r1Lan}}
+ area 0
+  network 10.0.0.0 0.0.0.3
+  quit
+ quit` },
+          { who: 'AR1', title: '配置公网默认路由', note: '出口路由器必须有去互联网的默认路由，否则 NAT 配了也出不去。',
+            code: `ip route-static 0.0.0.0 0.0.0.0 {{wanGw}}` },
+          { who: 'AR1', title: '配置 Easy IP', note: '把内网源地址转换成公网口地址；接口上的 nat outbound 才真正生效。',
+            code: `acl number 2000
+ rule 5 permit source {{lanNetwork}} {{wildcard}}
+ quit
+interface GigabitEthernet0/0/1
+ nat outbound 2000
+ quit` },
+          { who: 'AR1', title: '保存配置', note: 'eNSP 里不 save，设备重启后前面配的全白做。',
+            code: `save` },
+          { who: 'PC1', title: '让终端重新获取地址', note: '网卡先设为 DHCP，再在 PC 命令行执行；拿到地址后逐级 ping。',
+            code: `ipconfig /renew
+ping {{gateway}}
+ping {{wanGw}}` }
+        ],
+        verify: [
+          { who: 'SW1', cmd: 'display vlan', hope: 'VLAN {{vlanId}} 存在，Ge0/0/1 是 Untagged 成员' },
+          { who: 'SW1', cmd: 'display ip interface brief', hope: 'Vlanif{{vlanId}} 是 UP，地址为 {{gateway}}' },
+          { who: 'SW1', cmd: 'display ip pool', hope: '地址池有可用地址，终端已经租到一个 192.168.10.x 地址' },
+          { who: 'AR1', cmd: 'display nat outbound', hope: 'Ge0/0/1 上能看到 ACL 2000 的 Easy IP 规则' },
+          { who: 'PC1', cmd: 'ping {{wanGw}}', hope: '能通，说明网关、路由、NAT 和回程都正常' }
+        ]
+      },
       docs: {
         secs: [
-          { h: '数据包完整走一遍', p: 'PC(DHCP 拿到 192.168.10.100) → 网关 VLANIF10 → 查路由走默认路由 → 出口路由器 → NAT 换成公网地址 → 互联网。任何一环断了都会"上不了网"，所以排障要逐层验证。' },
-          { h: '最后一步别忘', p: '所有设备都要 save。eNSP 里忘记 save 直接关设备，前面配的全白做。' }
+          { h: '数据包完整走一遍', p: 'PC 通过 DHCP 拿到地址 → 网关 VLANIF → 查默认路由到 AR1 → OSPF 提供回程路由 → AR1 做 NAT → 运营商网关。任何一环断了都会表现为“上不了网”，所以按验证清单逐层查。' },
+          { h: '为什么参数只填一次', p: 'VLAN 号、终端网段、网关等值被所有设备步骤共用。改动任意一项后，每一段配置和验证命令都会同步更新，不需要在多个片段里重复核对。' }
         ],
         src: { n: '华为官方 · 配置 VLAN 间互访 / 静态路由示例', u: 'https://support.huawei.com/enterprise/zh/doc/EDOC1000178154/5141188a' }
       }

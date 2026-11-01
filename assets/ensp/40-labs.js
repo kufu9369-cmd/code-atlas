@@ -246,7 +246,8 @@ interface Vlanif30
           code: `display acl 3000` }
       ],
       verify: [
-        { cmd: 'PC2 ping 192.168.30.10', hope: '能通（门户服务器）' },
+        { cmd: 'PC2 浏览器访问 http://192.168.30.10', hope: '能打开（rule 5 只放行到门户的 TCP/80）' },
+        { cmd: 'PC2 ping 192.168.30.10', hope: '不通（ping 是 ICMP，不会命中 TCP/80 放行规则）' },
         { cmd: 'PC2 ping 192.168.10.10', hope: '不通（被 rule 10 deny 拦掉）' },
         { cmd: 'PC1 ping 192.168.30.10', hope: '能通（员工网不在限制范围内）' },
         { cmd: 'display acl 3000', hope: '能看到每条 rule 的匹配计数在增长，确认命中顺序正确' }
@@ -517,6 +518,7 @@ bgp {{asRemote}}
  peer 10.0.1.1 as-number {{asLocal}}
  peer 10.0.2.2 as-number {{asRemote}}
  peer 10.0.2.2 reflect-client
+ peer 10.0.2.2 next-hop-local
  quit` },
         { title: 'R3 宣告自己的网段', note: '',
           code: `system-view
@@ -558,18 +560,18 @@ display bgp routing-table` }
     /* ---------------- 7. MPLS VPN ---------------- */
     {
       id: 'lab-mpls-vpn',
-      title: 'MPLS VPN：两个客户私网互通',
+      title: 'MPLS VPN：两个客户站点私网互通',
       level: '综合',
       minutes: 45,
-      goal: '在两个 PE 之间建立 VPNv4 邻居，让两个站点相同网段的私网互相通而且不串。',
-      scene: '运营商给多个客户提供专网：客户内部用私网地址，不同客户可以用相同的 192.168.1.0/24。靠 VRF 隔离、RD 区分、RT 控制发布。',
+      goal: '在两个 PE 之间建立 VPNv4 邻居，让同一客户的两个站点通过 MPLS 骨干互通。',
+      scene: '运营商给多个客户提供专网：同一客户的不同站点使用各自的私网网段；不同客户可以复用相同网段，靠 VRF 隔离、RD 唯一化、RT 控制发布。',
       topo: {
         h: 260,
         nodes: [
           { id: 'CE1', label: 'CE1', sub: '192.168.1.0/24', t: 'router', x: 110, y: 70 },
           { id: 'PE1', label: 'PE1', sub: 'VRF CUST-A', t: 'router', x: 330, y: 170 },
           { id: 'PE2', label: 'PE2', sub: 'VRF CUST-A', t: 'router', x: 570, y: 170 },
-          { id: 'CE2', label: 'CE2', sub: '192.168.1.0/24', t: 'router', x: 700, y: 70 }
+          { id: 'CE2', label: 'CE2', sub: '192.168.2.0/24', t: 'router', x: 700, y: 70 }
         ],
         links: [
           ['CE1', 'PE1', '10.1.0.0/30'],
@@ -585,7 +587,8 @@ display bgp routing-table` }
         { dev: 'PE1', intf: 'LoopBack0', ip: '1.1.1.1/32', note: 'LSR ID / BGP 源' },
         { dev: 'PE2', intf: 'GE0/0/0', ip: '10.0.0.2/30', note: 'MPLS 骨干' },
         { dev: 'PE2', intf: 'GE0/0/1', ip: '10.2.0.1/30', note: '绑 VRF' },
-        { dev: 'CE2', intf: 'LoopBack0', ip: '192.168.1.2/24', note: '模拟客户网段' }
+        { dev: 'CE2', intf: 'GE0/0/1', ip: '10.2.0.2/30', note: '接 PE2' },
+        { dev: 'CE2', intf: 'LoopBack0', ip: '192.168.2.1/24', note: '模拟客户网段' }
       ],
       vars: {
         vrfName: { label: 'VRF 名', value: 'CUST-A', hint: '每客户一个', desc: '两个 PE 上的 VRF 名要一致，便于对照。' },
@@ -638,6 +641,20 @@ interface GigabitEthernet0/0/0
   peer 10.1.0.1 as-number 65010
   quit
  quit` },
+        { title: 'CE1：接口、Loopback 与 eBGP', note: 'CE 把本站点 192.168.1.0/24 宣告给 PE1；PE1 在 VRF 里看到它后会自动带入 VPNv4。',
+          code: `system-view
+sysname CE1
+interface GigabitEthernet0/0/0
+ ip address 10.1.0.1 255.255.255.252
+ quit
+interface LoopBack0
+ ip address 192.168.1.1 255.255.255.0
+ quit
+bgp 65010
+ router-id 10.1.0.1
+ peer 10.1.0.2 as-number {{peAs}}
+ network 192.168.1.0 255.255.255.0
+ quit` },
         { title: 'PE2：镜像配置', note: '对端 PE 同样建 VRF、绑接口、起 MP-BGP，RT 必须成对。',
           code: `system-view
 sysname PE2
@@ -680,6 +697,20 @@ bgp {{peAs}}
   peer 10.2.0.2 as-number 65020
   quit
  quit` },
+        { title: 'CE2：接口、Loopback 与 eBGP', note: 'PE2 在 VRF 里与 CE2 建 eBGP，并把 192.168.2.0/24 通过 VPNv4 发布给 PE1。',
+          code: `system-view
+sysname CE2
+interface GigabitEthernet0/0/1
+ ip address 10.2.0.2 255.255.255.252
+ quit
+interface LoopBack0
+ ip address 192.168.2.1 255.255.255.0
+ quit
+bgp 65020
+ router-id 10.2.0.2
+ peer 10.2.0.1 as-number {{peAs}}
+ network 192.168.2.0 255.255.255.0
+ quit` },
         { title: '验证', note: '',
           code: `display bgp vpnv4 all peer
 display ip routing-table vpn-instance {{vrfName}}` }
@@ -687,8 +718,8 @@ display ip routing-table vpn-instance {{vrfName}}` }
       verify: [
         { cmd: 'display mpls ldp session', hope: 'PE1 与 PE2 的 LDP 会话状态为 Operational' },
         { cmd: 'display bgp vpnv4 all peer', hope: 'VPNv4 邻居 Established' },
-        { cmd: 'display ip routing-table vpn-instance CUST-A', hope: 'PE1 上能看到对端 192.168.1.2 的明细路由，下一跳指向 PE2' },
-        { cmd: 'CE1 ping CE2 的业务地址', hope: '能通' }
+        { cmd: 'display ip routing-table vpn-instance CUST-A', hope: 'PE1 的 VRF 里能看到 192.168.2.0/24，下一跳指向 PE2' },
+        { cmd: 'CE1 ping -a 192.168.1.1 192.168.2.1', hope: '能通，且源地址是 CE1 的业务地址' }
       ],
       pitfalls: [
         'RD 两端配成一样也能通，但多客户场景会冲突；RD 的作用是唯一化，一般按客户区分。',
@@ -726,43 +757,68 @@ display ip routing-table vpn-instance {{vrfName}}` }
         ]
       },
       plan: [
-        { dev: 'SW1', intf: 'Vlanif10', ip: '192.168.10.1/24 + 2001:db8:10::1/64', note: '终端网关' },
+        { dev: 'PC1', intf: '网卡', ip: '192.168.10.10/24 + SLAAC', note: '网关 192.168.10.1' },
+        { dev: 'SW1', intf: 'Vlanif10', ip: '192.168.10.1/24 + 2001:db8:10::1/64', note: '终端双栈网关' },
         { dev: 'SW1', intf: 'Vlanif100', ip: '10.0.0.1/30 + 2001:db8:0::1/64', note: '上联 R1' },
         { dev: 'R1', intf: 'GE0/0/0', ip: '10.0.0.2/30 + 2001:db8:0::2/64', note: '接 SW1' },
-        { dev: 'R1', intf: 'LoopBack0', ip: '2001:db8:100::1/64', note: '模拟远端网段' }
+        { dev: 'R1', intf: 'LoopBack0', ip: '192.168.100.1/24 + 2001:db8:100::1/64', note: '模拟双栈远端' }
       ],
       vars: {
         v6Prefix: { label: '终端网段前缀', value: '2001:db8:10::', hint: '必须是 /64', desc: 'SLAAC 要求 /64，写别的长度终端拿不到地址。' },
         v6Remote: { label: '远端网段', value: '2001:db8:100::', hint: '模拟外网', desc: '用来验证 OSPFv3 是否把路由传过来了。' }
       },
       steps: [
-        { title: 'SW1：全局开 IPv6 + 双栈地址', note: 'system-view 下的 ipv6 是总开关，接口上还要 ipv6 enable。',
+        { title: 'SW1：二层接入 + IPv4/IPv6 双栈网关', note: '先把 PC 和 R1 的接入 VLAN 划好，再在 Vlanif 上同时配置两套地址。',
           code: `system-view
 sysname SW1
 ipv6
 vlan batch 10 100
+interface GigabitEthernet0/0/1
+ port link-type access
+ port default vlan 10
+ quit
+interface GigabitEthernet0/0/2
+ port link-type access
+ port default vlan 100
+ quit
 interface Vlanif10
+ ip address 192.168.10.1 255.255.255.0
  ipv6 enable
  ipv6 address {{v6Prefix}}1/64
  undo ipv6 nd ra halt
  quit
 interface Vlanif100
+ ip address 10.0.0.1 255.255.255.252
  ipv6 enable
  ipv6 address 2001:db8:0::1/64
+ quit
+ospf 1 router-id 2.2.2.2
+ area 0
+  network 10.0.0.0 0.0.0.3
+  network 192.168.10.0 0.0.0.255
+  quit
  quit` },
-        { title: 'R1：对端地址 + OSPFv3', note: 'OSPFv3 没有 network 命令，直接在接口上挂进程和区域。',
+        { title: 'R1：双栈地址 + OSPFv2 + OSPFv3', note: 'IPv4 用 OSPFv2，IPv6 用 OSPFv3；两套协议栈和路由表互相独立。',
           code: `system-view
 sysname R1
 ipv6
 interface GigabitEthernet0/0/0
+ ip address 10.0.0.2 255.255.255.252
  ipv6 enable
  ipv6 address 2001:db8:0::2/64
  ospfv3 1 area 0.0.0.0
  quit
 interface LoopBack0
+ ip address 192.168.100.1 255.255.255.0
  ipv6 enable
  ipv6 address {{v6Remote}}1/64
  ospfv3 1 area 0.0.0.0
+ quit
+ospf 1 router-id 1.1.1.1
+ area 0
+  network 10.0.0.0 0.0.0.3
+  network 192.168.100.0 0.0.0.255
+  quit
  quit
 ospfv3 1
  router-id 1.1.1.1
@@ -783,7 +839,8 @@ display ipv6 routing-table` }
         { cmd: 'display ipv6 interface brief', hope: '各接口都有 link-local（fe80::）和全局地址，状态 UP' },
         { cmd: 'display ospfv3 peer', hope: 'SW1 与 R1 邻接状态为 Full' },
         { cmd: 'display ipv6 routing-table', hope: 'SW1 上能看到 2001:db8:100::/64 的 OSPFv3 路由' },
-        { cmd: 'PC1 ping 2001:db8:100::1', hope: '能通；同时原 IPv4 业务不受影响' }
+        { cmd: 'PC1 ping 192.168.100.1', hope: 'IPv4 能通，说明原有 IPv4 业务未被双栈影响' },
+        { cmd: 'PC1 ping 2001:db8:100::1', hope: 'IPv6 也能通，两套协议栈独立工作' }
       ],
       pitfalls: [
         '忘了 undo ipv6 nd ra halt，终端收不到 RA，地址一直「正在获取」。',
@@ -823,6 +880,7 @@ display ipv6 routing-table` }
       },
       plan: [
         { dev: 'AC1', intf: 'Vlanif100', ip: '192.168.100.254/24', note: 'capwap 源接口' },
+        { dev: 'AC1', intf: 'Vlanif200', ip: '192.168.200.254/24', note: '业务网关（DHCP）' },
         { dev: 'SW1', intf: 'Vlanif100', ip: '192.168.100.1/24', note: 'AP 网关（DHCP）' },
         { dev: 'SW1', intf: 'GE0/0/1', ip: '—', note: 'Trunk 连 AC，放通 100/200' },
         { dev: 'SW1', intf: 'GE0/0/2', ip: '—', note: 'Trunk PVID 100 连 AP' }
@@ -834,15 +892,20 @@ display ipv6 routing-table` }
         wifiPwd: { label: 'Wi-Fi 密码', value: 'Wifi@2026', hint: '至少 8 位', desc: 'WPA2-PSK 最短 8 位。' }
       },
       steps: [
-        { title: 'AC：管理地址与 CAPWAP 源', note: 'capwap source 必须在 AP 上线前配好，否则 AP 不知道自己该找谁。',
+        { title: 'AC：管理地址、业务网关与 CAPWAP 源', note: '隧道转发时终端业务报文回到 AC，所以业务 VLAN 的网关和 DHCP 都要建在 AC 上。',
           code: `system-view
 sysname AC1
+dhcp enable
 vlan batch {{mgmtVlan}} {{svcVlan}}
 interface Vlanif{{mgmtVlan}}
  ip address 192.168.100.254 255.255.255.0
  quit
+interface Vlanif{{svcVlan}}
+ ip address 192.168.200.254 255.255.255.0
+ dhcp select interface
+ quit
 capwap source interface Vlanif{{mgmtVlan}}` },
-        { title: 'SW1：给 AP 发地址', note: 'AP 上线第一步是拿管理地址。DHCP 要在 AP 所在 VLAN 的接口上使能。',
+        { title: 'SW1：给 AP 发地址', note: '这里只负责 AP 管理地址；终端业务地址由 AC 的 Vlanif200 下发。',
           code: `system-view
 sysname SW1
 vlan batch {{mgmtVlan}} {{svcVlan}}
@@ -884,7 +947,8 @@ interface GigabitEthernet0/0/2
       verify: [
         { cmd: 'display ap all', hope: 'AP 的 State 为 nor，IP 是 192.168.100.x 网段' },
         { cmd: 'display vap ssid Office-WiFi', hope: '能看到 VAP 已下发，状态为 ON' },
-        { cmd: 'PC1 连接 Wi-Fi', hope: '能搜到 Office-WiFi，输密码后关联成功并拿到 192.168.200.x 地址' }
+        { cmd: 'PC1 连接 Wi-Fi', hope: '能搜到 Office-WiFi，输密码后关联成功并拿到 192.168.200.x 地址' },
+        { cmd: 'PC1 ping 192.168.200.254', hope: '能通，说明业务 VLAN 的网关和 DHCP 都在 AC 上生效' }
       ],
       pitfalls: [
         'capwap source interface 没配或配错网段，AP 一直停在「正在获取 IP」或「寻找 AC」。',

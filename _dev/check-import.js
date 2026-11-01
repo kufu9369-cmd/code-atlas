@@ -23,7 +23,8 @@ require('../assets/data.js');
 require('../assets/topics.js');
 require('../assets/search.js');
 ['00-base', '10-basic', '20-adv', '30-pro', '40-labs', '50-presets-flows',
-  '60-cmd', '70-cmd-query', '99-merge'].forEach(f => require('../assets/ensp/' + f + '.js'));
+  '60-cmd', '70-cmd-query', '80-recipes', '82-recipes-route', '84-recipes-sec',
+  '99-merge'].forEach(f => require('../assets/ensp/' + f + '.js'));
 ['00-base', '10-servlet', '20-jsp', '30-jdbc', '40-mvc', '50-deploy',
   '60-labs', '70-presets-flows', '80-cmd', '99-merge'].forEach(f => require('../assets/javaweb/' + f + '.js'));
 ['00-base', '10-htmlcss', '20-js', '30-jquery', '40-compat',
@@ -159,12 +160,35 @@ console.log('\n=== 3. snippets/category 扁平写法 ===');
 console.log('\n=== 4. 全量导出后原样导回（round-trip） ===');
 {
   reset();
+  window.CodeAtlas = {
+    values: { 'task:preset-l3-office|vlanId': '30' },
+    favorites: ['snippet:test-x'],
+    taskProgress: { 'preset-l3-office': { done: { 0: true }, verify: {} } }
+  };
   const all = P.exportAll();
+  const task = all.presets.find(p => p.id === 'preset-l3-office');
+  ok('全量导出包含配置剧本', all.recipes.length === (D.recipes || []).length,
+    all.recipes.length + ' / ' + (D.recipes || []).length);
+  ok('全量导出保留任务的设备/步骤/验证', !!(task && task.task && task.task.steps.length === 12 && task.task.devices.length >= 3),
+    task && task.task ? task.task.steps.length + ' 步 / ' + task.task.devices.length + ' 设备' : '任务丢失');
+  ok('全量导出保留收藏、变量和任务进度', all.userdata && all.userdata.values['task:preset-l3-office|vlanId'] === '30'
+    && all.userdata.favorites.indexOf('snippet:test-x') >= 0
+    && all.userdata.task['preset-l3-office'].done[0] === true);
+
   const r = trial(JSON.stringify(all));
   console.log('    阶段：' + r.step);
   if (r.conflict) console.log('    冲突条数：' + r.conflict.length + '，前 3 条：' + r.conflict.slice(0, 3).join('、'));
   ok('全量导出能原样导回（README 承诺"改完再导回来"）', r.step === 'installed',
     r.step === 'blocked-at-conflict' ? r.conflict.length + ' 个 id 全部判为冲突' : r.step);
+
+  const back = r.norm && r.norm.pack;
+  const backTask = back && back.presets.find(p => p.id === 'preset-l3-office');
+  ok('导入后的任务字段没有降级', !!(backTask && backTask.task && backTask.task.steps.length === 12
+    && backTask.task.env.vlanId && backTask.task.verify.length === 5),
+    backTask && backTask.task ? JSON.stringify({ steps: backTask.task.steps.length, verify: backTask.task.verify.length, env: Object.keys(backTask.task.env).length }) : '任务丢失');
+  ok('导入后剧本和用户数据仍在', !!(back && back.recipes.length === (D.recipes || []).length
+    && back.userdata && back.userdata.favorites.length === 1));
+  delete window.CodeAtlas;
 }
 {
   /* 用户真会这么干：导出 → 改个 id 想导回 */

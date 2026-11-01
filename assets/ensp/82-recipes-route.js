@@ -43,8 +43,8 @@
       tags: ['浮动路由', 'preference', '静态路由', '备份'],
       steps: [
         { c: 'system-view' },
-        { c: 'ip route-static 192.168.20.0 24 10.0.0.2', note: '主用，默认优先级 60' },
-        { c: 'ip route-static 192.168.20.0 24 10.0.1.2 preference 70', note: '备用，preference 值更大 → 优先级更低，主用还在时它不进路由表' },
+        { c: 'ip route-static 192.168.20.0 255.255.255.0 10.0.0.2', note: '主用，默认优先级 60；与 rec-static 一样使用完整掩码写法' },
+        { c: 'ip route-static 192.168.20.0 255.255.255.0 10.0.1.2 preference 70', note: '备用，preference 值更大 → 优先级更低，主用还在时它不进路由表' },
         { c: 'display ip routing-table', note: '正常情况下只看到主用那条' },
         { c: 'display ip routing-table protocol static', note: '备用的会显示为 Inactive，主用挂了才变 Active' }
       ],

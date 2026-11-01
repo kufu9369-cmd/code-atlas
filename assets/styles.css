@@ -648,6 +648,10 @@ pre.code code { font: inherit; }
   white-space: nowrap;
   pointer-events: none;
   font-weight: 500;
+  /* 角标是装饰，不能进剪贴板：用户拿鼠标拖选代码时会把「自主」一起复制走，
+     粘到 eNSP 里就是 `vlan batch 自主30` 这种无效命令 */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .var .vv { white-space: pre-wrap; color: var(--amber-tx2); }
 /* 多行块状自主区 */
@@ -760,6 +764,94 @@ pre.code code { font: inherit; }
   transition: .15s;
 }
 .pstep-h .go:hover { color: var(--iris); }
+
+/* ============================================================
+   可执行任务（预设升级形态）
+   ============================================================ */
+.task-toolbar { align-items: center; }
+.task-saved {
+  margin-left: auto; font-size: 11px; color: var(--tx-3);
+  white-space: nowrap;
+}
+.task-prog {
+  margin: 14px 0 4px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel);
+}
+.task-prog-top {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-bottom: 8px; font-size: 11.5px; color: var(--tx-3);
+}
+.task-prog-top b { color: var(--tx); font-family: var(--mono); font-size: 12px; }
+.task-bar {
+  height: 5px; border-radius: 999px; overflow: hidden;
+  background: var(--wash-2);
+}
+.task-bar i {
+  display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--mint), var(--iris));
+  transition: width .2s ease;
+}
+.task-env { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.task-env .own-chip .val { white-space: normal; word-break: break-all; }
+.task-dev {
+  margin: 0 0 16px; border: 1px solid var(--line);
+  border-radius: 14px; overflow: hidden; background: var(--wash-1);
+}
+.task-dev-h {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.task-dev-h > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.task-dev-h b { font-family: var(--mono); font-size: 13px; color: var(--tx-hi); }
+.task-role { font-size: 11px; color: var(--mint); }
+.task-wire { font-size: 11px; color: var(--tx-3); }
+.task-dev-copy { flex: none; height: 30px; font-size: 11px; }
+.task-step { padding: 14px 14px 0; }
+.task-step:last-child { padding-bottom: 14px; }
+.task-step.done { opacity: .62; }
+.task-step.done .pstep-h .t { text-decoration: line-through; text-decoration-color: var(--line-3); }
+.task-step .pstep-h { padding-left: 0; }
+.task-step .pstep-h .task-who {
+  font-family: var(--mono); font-size: 10px; color: var(--tx-3);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px;
+}
+.task-step .pstep-h .go { margin-left: 0; }
+.task-check {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--line-3); border-radius: 7px;
+  background: transparent; color: transparent;
+  font-size: 12px; line-height: 1; transition: .15s;
+}
+.task-check:hover { border-color: var(--mint); color: var(--mint); }
+.task-check.on {
+  color: var(--bg); background: var(--mint); border-color: var(--mint);
+}
+.task-v-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task-v-h .vcmd { flex: 1; min-width: 160px; }
+.task-v.done { border-color: color-mix(in srgb, var(--mint) 42%, var(--line)); }
+.task-v.done .vhope { color: var(--tx-3); }
+.task-v.done .task-who { opacity: .6; }
+.task-v .task-who {
+  flex: none; font-family: var(--mono); font-size: 10px; color: var(--mint);
+  border: 1px solid color-mix(in srgb, var(--mint) 35%, var(--line));
+  border-radius: 4px; padding: 1px 4px;
+}
+.task-doc {
+  margin-bottom: 10px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.task-doc b { display: block; margin-bottom: 5px; font-size: 12px; color: var(--tx); }
+.task-doc p { margin: 0; font-size: 12px; line-height: 1.7; color: var(--tx-2); }
+
+@media (max-width: 560px) {
+  .task-dev-h { align-items: flex-start; flex-direction: column; }
+  .task-dev-copy { width: 100%; justify-content: center; }
+  .task-saved { display: none; }
+  .task-prog-top { flex-direction: column; gap: 4px; }
+}
 
 /* ============================================================
    实验

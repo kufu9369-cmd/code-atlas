@@ -1,7 +1,7 @@
 {
   "name": "code-atlas",
   "productName": "CodeAtlas",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "CodeAtlas - 可自主配置的代码大全",
   "main": "electron/main.js",
   "author": "CodeAtlas",
@@ -12,6 +12,8 @@
     "dist": "electron-builder --win nsis --x64",
     "dist:dir": "electron-builder --win --dir --x64",
     "www": "node scripts/prepare-www.js",
+    "check": "node _dev/check-all.js && node _dev/check-ensp.js && node _dev/check-recipes.js && node _dev/check-nextstep.js && node _dev/check-search.js && node _dev/check-import.js && node _dev/check-content-semantics.js",
+    "check:ui": "node _dev/shot-task.js",
     "icons": "python scripts/make-icon.py",
     "android:sync": "npm run www && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",

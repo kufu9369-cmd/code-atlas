@@ -36,6 +36,7 @@
   var manual = false;      // 用户手动改过输入框：剪贴板变化不覆盖他的输入
   var lastResult = null;
   var lastText = '';
+  var ownClip = null;    // 应用自己写出的剪贴板内容，不能再当成用户输入
 
   /* ---------- 小工具 ---------- */
   function esc(s) {
@@ -56,6 +57,7 @@
   function copy(text) {
     var s = String(text || '');
     if (!s) return;
+    ownClip = { text: s, until: Date.now() + 1800 };
     Promise.resolve(D.clip.write(s)).then(function () {
       toast('已复制：' + (s.split('\n')[0].slice(0, 28) + (s.indexOf('\n') >= 0 ? ' …' : '')));
     }).catch(function () { toast('复制失败'); });
@@ -367,6 +369,11 @@
       if (!open || manual) return;
       var t = String(text || '').trim();
       if (!t) return;
+      if (ownClip) {
+        var own = ownClip;
+        ownClip = null;
+        if (Date.now() <= own.until && t === own.text.trim()) return;
+      }
       input.value = t;
       run(t);
       hint.textContent = '剪贴板更新了（' + t.split('\n').length + ' 行）';

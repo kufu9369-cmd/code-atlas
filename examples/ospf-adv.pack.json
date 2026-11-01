@@ -91,17 +91,17 @@
         {
           "title": "R1 / R2：先把 Area 0 建起来",
           "note": "虚连接的两端必须在同一个中转区域里有接口，先把底层打通",
-          "code": "system-view\nsysname R1\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.1 255.255.255.0\n quit\nospf {{proc}} router-id 1.1.1.1\n area 0\n  network 10.0.12.0 255.255.255.0\n  quit\n quit"
+          "code": "system-view\nsysname R1\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.1 255.255.255.0\n quit\nospf {{proc}} router-id 1.1.1.1\n area 0\n  network 10.0.12.0 0.0.0.255\n  quit\n quit"
         },
         {
           "title": "R2：骨干 + 中转区域都挂上（ABR）",
           "note": "R2 同时属于 Area 0 和 Area 1",
-          "code": "system-view\nsysname R2\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.2 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.23.2 255.255.255.0\n quit\nospf {{proc}} router-id {{rid2}}\n area 0\n  network 10.0.12.0 255.255.255.0\n  quit\n area {{areaTrans}}\n  network 10.0.23.0 255.255.255.0\n  quit\n quit"
+          "code": "system-view\nsysname R2\ninterface GigabitEthernet 0/0/0\n ip address 10.0.12.2 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.23.2 255.255.255.0\n quit\nospf {{proc}} router-id {{rid2}}\n area 0\n  network 10.0.12.0 0.0.0.255\n  quit\n area {{areaTrans}}\n  network 10.0.23.0 0.0.0.255\n  quit\n quit"
         },
         {
           "title": "R3：中转 + 末端区域（这里没有直连骨干）",
           "note": "此时 Area 2 的路由进不了骨干，因为 R3 不是 ABR",
-          "code": "system-view\nsysname R3\ninterface GigabitEthernet 0/0/0\n ip address 10.0.23.3 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.3.1 255.255.255.0\n quit\nospf {{proc}} router-id {{rid3}}\n area {{areaTrans}}\n  network 10.0.23.0 255.255.255.0\n  quit\n area {{areaEnd}}\n  network 10.0.3.0 255.255.255.0\n  quit\n quit"
+          "code": "system-view\nsysname R3\ninterface GigabitEthernet 0/0/0\n ip address 10.0.23.3 255.255.255.0\n quit\ninterface GigabitEthernet 0/0/1\n ip address 10.0.3.1 255.255.255.0\n quit\nospf {{proc}} router-id {{rid3}}\n area {{areaTrans}}\n  network 10.0.23.0 0.0.0.255\n  quit\n area {{areaEnd}}\n  network 10.0.3.0 0.0.0.255\n  quit\n quit"
         },
         {
           "title": "R2 / R3：双向拉虚连接",

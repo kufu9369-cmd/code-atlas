@@ -45,6 +45,7 @@
     (d.labs || []).forEach(function (l) { out['lab:' + l.id] = 1; });
     (d.presets || []).forEach(function (p) { out['preset:' + p.id] = 1; });
     (d.flows || []).forEach(function (f) { out['flow:' + f.id] = 1; });
+    (d.recipes || []).forEach(function (r) { out['recipe:' + r.id] = 1; });
     return out;
   }
 
@@ -118,9 +119,11 @@
       name: String(raw.name || raw.title || '').trim(),
       version: String(raw.version || '1'),
       desc: String(raw.desc || raw.description || '').trim(),
-      cats: [], labs: [], presets: [], flows: [],
+      cats: [], labs: [], presets: [], flows: [], recipes: [],
       cmd: (raw.cmd && typeof raw.cmd === 'object') ? raw.cmd : {},
+      cmdSrc: (raw.cmdSrc && typeof raw.cmdSrc === 'object') ? raw.cmdSrc : {},
       keywords: Array.isArray(raw.keywords) ? raw.keywords.slice() : [],
+      userdata: (raw.userdata && typeof raw.userdata === 'object') ? raw.userdata : null,
       /* 只有明确声明 true 才允许按 id 覆盖内置内容 */
       overwrite: raw.overwrite === true
     };
@@ -159,6 +162,7 @@
     pack.labs = (raw.labs || []).map(normLab);
     pack.presets = (raw.presets || []).map(normPreset);
     pack.flows = (raw.flows || []).map(normFlow);
+    pack.recipes = (raw.recipes || []).map(normRecipe);
 
     /* ---- 逐项校验 ---- */
     var snipIds = {};
@@ -180,15 +184,17 @@
     pack.labs.forEach(function (l, i) { checkLab(l, 'labs[' + i + ']', res); uniq('lab', l.id, 'labs[' + i + ']'); });
     pack.presets.forEach(function (p, i) { checkPreset(p, 'presets[' + i + ']', res, snipIds); uniq('preset', p.id, 'presets[' + i + ']'); });
     pack.flows.forEach(function (f, i) { checkFlow(f, 'flows[' + i + ']', res); uniq('flow', f.id, 'flows[' + i + ']'); });
+    pack.recipes.forEach(function (r, i) { checkRecipe(r, 'recipes[' + i + ']', res); uniq('recipe', r.id, 'recipes[' + i + ']'); });
 
-    var n = pack.cats.reduce(function (a, c) { return a + c.items.length; }, 0) + pack.labs.length + pack.presets.length + pack.flows.length + Object.keys(pack.cmd).length;
+    var n = pack.cats.reduce(function (a, c) { return a + c.items.length; }, 0)
+      + pack.labs.length + pack.presets.length + pack.flows.length + pack.recipes.length + Object.keys(pack.cmd).length;
     if (!n) res.errors.push('包里没有任何内容（snippets / labs / presets / flows / cmd 至少要有一项）');
 
     res.stats = {
       categories: pack.cats.length,
       snippets: pack.cats.reduce(function (a, c) { return a + c.items.length; }, 0),
       labs: pack.labs.length, presets: pack.presets.length,
-      flows: pack.flows.length, cmd: Object.keys(pack.cmd).length
+      flows: pack.flows.length, recipes: pack.recipes.length, cmd: Object.keys(pack.cmd).length
     };
     res.pack = pack;
     return res;
@@ -208,6 +214,7 @@
       docs: (s.docs && typeof s.docs === 'object') ? s.docs : undefined,
       flow: s.flow
     };
+    if (s.device) out.device = String(s.device);
     /* level 决定列表里「入门 / 进阶 / 综合」分组，丢了条目会掉到「综合」。
        topic 一般由分类推断，但允许包里显式指定。 */
     if (['入门', '进阶', '综合'].indexOf(s.level) >= 0) out.level = s.level;
@@ -217,7 +224,41 @@
 
   function normStep(st) {
     st = st || {};
-    return { title: String(st.title || '').trim(), note: st.note ? String(st.note) : '', ref: st.ref, code: String(st.code || '') };
+    return {
+      title: String(st.title || '').trim(), note: st.note ? String(st.note) : '',
+      ref: st.ref, code: String(st.code || ''),
+      scene: st.scene ? String(st.scene) : undefined
+    };
+  }
+
+  /* 可执行任务：环境参数 + 设备 + 带设备归属的步骤 + 验证。
+     导出/导入必须保留完整字段，不然任务导回去会退化成普通预设。 */
+  function normTask(t) {
+    t = t || {};
+    var env = {};
+    Object.keys(t.env || {}).forEach(function (k) {
+      var d = t.env[k];
+      if (d && typeof d === 'object') env[k] = Object.assign({}, d);
+    });
+    return {
+      env: env,
+      devices: (t.devices || []).map(function (d) {
+        return { id: String(d.id || ''), role: String(d.role || ''), note: String(d.note || '') };
+      }).filter(function (d) { return d.id; }),
+      planHead: Array.isArray(t.planHead) ? t.planHead.map(String).slice(0, 4) : undefined,
+      plan: (t.plan || []).map(function (r) {
+        return { dev: String(r.dev || ''), intf: String(r.intf || ''), ip: String(r.ip || ''), note: String(r.note || '') };
+      }),
+      steps: (t.steps || []).map(function (s) {
+        return {
+          who: String(s.who || ''), title: String(s.title || '').trim(),
+          note: s.note ? String(s.note) : '', code: String(s.code || '')
+        };
+      }),
+      verify: (t.verify || []).map(function (v) {
+        return { who: String(v.who || ''), cmd: String(v.cmd || ''), hope: String(v.hope || '') };
+      })
+    };
   }
 
   function normLab(l) {
@@ -239,6 +280,7 @@
         }),
         links: (t.links || []).map(function (k) { return Array.isArray(k) ? k.slice(0, 3) : k; })
       } : undefined,
+      planHead: Array.isArray(l.planHead) ? l.planHead.map(String).slice(0, 4) : undefined,
       plan: Array.isArray(l.plan) ? l.plan.map(function (r) {
         return { dev: String(r.dev || ''), intf: String(r.intf || ''), ip: String(r.ip || ''), note: String(r.note || '') };
       }) : [],
@@ -252,6 +294,9 @@
     };
     if (l.topic) out.topic = String(l.topic);
     if (l.cat) out.cat = String(l.cat);
+    if (l.fileExt) out.fileExt = String(l.fileExt);
+    if (l.stepsTitle) out.stepsTitle = String(l.stepsTitle);
+    if (l.planTitle) out.planTitle = String(l.planTitle);
     return out;
   }
 
@@ -262,15 +307,40 @@
       title: String(p.title || '').trim(),
       summary: String(p.summary || p.desc || '').trim(),
       features: Array.isArray(p.features) ? p.features.map(String) : [],
-      steps: (p.steps || []).map(function (s) {
+      scene: p.scene ? String(p.scene) : '',
+      steps: p.task ? [] : (p.steps || []).map(function (s) {
         /* ref 指向片段 id，而片段 id 已经过一遍 slug（小写、下划线转横线），
            ref 不跟着规范化就会「指向一个不存在的片段」。 */
-        return { ref: slug(s.ref || ''), label: s.label ? String(s.label) : '', vars: s.vars || {} };
+        return {
+          ref: slug(s.ref || ''), label: s.label ? String(s.label) : '',
+          note: s.note ? String(s.note) : '', vars: s.vars || {},
+          scene: s.scene ? String(s.scene) : undefined
+        };
       }),
       docs: (p.docs && typeof p.docs === 'object') ? p.docs : undefined
     };
+    if (p.task) out.task = normTask(p.task);
     if (p.topic) out.topic = String(p.topic);
     return out;
+  }
+
+  function normRecipe(r) {
+    r = r || {};
+    return {
+      id: slug(r.id || r.title || ''),
+      title: String(r.title || '').trim(),
+      scene: String(r.scene || '').trim(),
+      level: ['入门', '进阶', '高级', '综合'].indexOf(r.level) >= 0 ? r.level : '进阶',
+      tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+      steps: (r.steps || []).map(function (s) {
+        return { c: String(s.c || ''), note: s.note ? String(s.note) : '', who: s.who ? String(s.who) : '' };
+      }),
+      verify: Array.isArray(r.verify) ? r.verify.map(function (v) {
+        return { cmd: String(v.cmd || ''), hope: String(v.hope || '') };
+      }) : [],
+      pitfalls: Array.isArray(r.pitfalls) ? r.pitfalls.map(String) : [],
+      scope: r.scope ? String(r.scope) : undefined
+    };
   }
 
   function normFlow(f) {
@@ -401,11 +471,33 @@
     var at = path + (p.title ? '（' + brief(p.title, 18) + '）' : '');
     if (!p.id) res.errors.push(path + ' 缺少 id');
     if (!p.title) res.errors.push(path + ' 缺少 title');
-    if (!p.steps.length) res.errors.push(at + ' 没有任何步骤');
-    p.steps.forEach(function (s, i) {
-      if (!s.ref) res.errors.push(at + '.steps[' + i + '] 缺少 ref（指向哪个片段）');
-      else if (!snipIds[s.ref]) res.errors.push(at + '.steps[' + i + '] 的 ref "' + s.ref + '" 找不到对应片段');
-    });
+    if (p.task) {
+      var t = p.task, devIds = {};
+      (t.devices || []).forEach(function (d, i) {
+        if (!d.id) res.errors.push(at + '.task.devices[' + i + '] 缺少 id');
+        else devIds[d.id] = 1;
+      });
+      if (!t.steps.length) res.errors.push(at + '.task 没有任何步骤');
+      t.steps.forEach(function (s, i) {
+        if (!s.code) res.errors.push(at + '.task.steps[' + i + '] 缺少 code');
+        if (!s.who) res.errors.push(at + '.task.steps[' + i + '] 缺少 who（在哪台设备执行）');
+        else if (!devIds[s.who]) res.errors.push(at + '.task.steps[' + i + '] 的设备 "' + s.who + '" 未在 devices 里声明');
+        (String(s.code).match(/\{\{[A-Za-z0-9_]+\}\}/g) || []).forEach(function (r) {
+          var n = r.slice(2, -2);
+          if (!(n in t.env)) res.errors.push(at + '.task.steps[' + i + '] 用了 {{' + n + '}} 但 task.env 里没定义');
+        });
+      });
+      t.verify.forEach(function (v, i) {
+        if (!v.cmd) res.errors.push(at + '.task.verify[' + i + '] 缺少 cmd');
+        if (!v.hope) res.errors.push(at + '.task.verify[' + i + '] 缺少 hope');
+      });
+    } else {
+      if (!p.steps.length) res.errors.push(at + ' 没有任何步骤');
+      p.steps.forEach(function (s, i) {
+        if (!s.ref) res.errors.push(at + '.steps[' + i + '] 缺少 ref（指向哪个片段）');
+        else if (!snipIds[s.ref]) res.errors.push(at + '.steps[' + i + '] 的 ref "' + s.ref + '" 找不到对应片段');
+      });
+    }
     checkDocsUrl(p, at, res);
   }
 
@@ -425,6 +517,17 @@
       });
     });
     if (!ends) res.errors.push(path + ' 至少要有一个 kind:"end" 的结论节点');
+  }
+
+  function checkRecipe(r, path, res) {
+    var at = path + (r.title ? '（' + brief(r.title, 18) + '）' : '');
+    if (!r.id) res.errors.push(path + ' 缺少 id');
+    if (!r.title) res.errors.push(path + ' 缺少 title');
+    if (!r.steps.length) res.errors.push(at + ' 没有任何步骤');
+    r.steps.forEach(function (s, i) {
+      if (!s.c) res.errors.push(at + '.steps[' + i + '] 缺少命令 c');
+    });
+    if (!r.verify.length) res.warnings.push(at + ' 没有 verify（配完没法确认）');
   }
 
   /* ============================================================
@@ -475,7 +578,7 @@
   }
 
   function apply(D, pack) {
-    var st = { categories: 0, snippets: 0, labs: 0, presets: 0, flows: 0, cmd: 0 };
+    var st = { categories: 0, snippets: 0, labs: 0, presets: 0, flows: 0, recipes: 0, cmd: 0 };
     if (!pack) return st;
     var overwrite = !!pack.overwrite;
     var tid = packTopic(pack);
@@ -505,19 +608,47 @@
     D.labs = D.labs || [];
     D.presets = D.presets || [];
     D.flows = D.flows || [];
+    D.recipes = D.recipes || [];
     tagTopic(pack.labs || [], tid);
     tagTopic(pack.presets || [], tid);
     tagTopic(pack.flows || [], tid);
     (pack.labs || []).forEach(function (l) { addOnce(D.labs, l, 'labs', st); });
     (pack.presets || []).forEach(function (p) { addOnce(D.presets, p, 'presets', st); });
     (pack.flows || []).forEach(function (f) { addOnce(D.flows, f, 'flows', st); });
+    (pack.recipes || []).forEach(function (r) { addOnce(D.recipes, r, 'recipes', st); });
 
     Object.keys(pack.cmd || {}).forEach(function (w) {
       if (!D.cmd[w]) { D.cmd[w] = pack.cmd[w]; st.cmd++; }
     });
+    /* cmdSrc 是命令词条到官方文档来源的映射，丢了会把 git/mysql 命令
+       指回华为文档。导出备份要能原样恢复。 */
+    D.cmdSrc = D.cmdSrc || {};
+    Object.keys(pack.cmdSrc || {}).forEach(function (k) {
+      var cur = D.cmdSrc[k] || [];
+      D.cmdSrc[k] = cur.concat(pack.cmdSrc[k] || []).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    });
     (pack.keywords || []).forEach(function (k) {
       if (D.keywords.indexOf(k) < 0) D.keywords.push(k);
     });
+    /* 全量备份里的本机数据要在 app.js 启动前就写回 localStorage。
+       导入流程会 location.reload()，如果只在 CodeAtlas 存在时恢复，
+       刷新后的启动早期还没这个对象，收藏和变量就丢了。 */
+    if (pack.userdata && typeof pack.userdata === 'object') {
+      try {
+        if (pack.userdata.values && typeof pack.userdata.values === 'object') {
+          localStorage.setItem('codeatlas.vals.v1', JSON.stringify(pack.userdata.values));
+        }
+        if (Array.isArray(pack.userdata.favorites)) {
+          localStorage.setItem('codeatlas.fav.v1', JSON.stringify(pack.userdata.favorites));
+        }
+        if (pack.userdata.task && typeof pack.userdata.task === 'object') {
+          localStorage.setItem('codeatlas.task.v1', JSON.stringify(pack.userdata.task));
+        }
+      } catch (e) { /* 存储不可用时保留其余内容导入 */ }
+    }
+    if (pack.userdata && window.CodeAtlas && window.CodeAtlas.applyUserdata) {
+      window.CodeAtlas.applyUserdata(pack.userdata);
+    }
     return st;
   }
 
@@ -551,6 +682,7 @@
     (pack.labs || []).forEach(function (l) { if (base['lab:' + l.id]) bad.push('实验 ' + l.id); });
     (pack.presets || []).forEach(function (p) { if (base['preset:' + p.id]) bad.push('预设 ' + p.id); });
     (pack.flows || []).forEach(function (f) { if (base['flow:' + f.id]) bad.push('工作流 ' + f.id); });
+    (pack.recipes || []).forEach(function (r) { if (base['recipe:' + r.id]) bad.push('剧本 ' + r.id); });
     return bad;
   }
 
@@ -568,7 +700,8 @@
       stats: {
         snippets: (pack.cats || []).reduce(function (a, c) { return a + c.items.length; }, 0),
         labs: (pack.labs || []).length, presets: (pack.presets || []).length,
-        flows: (pack.flows || []).length, cmd: Object.keys(pack.cmd || {}).length
+        flows: (pack.flows || []).length, recipes: (pack.recipes || []).length,
+        cmd: Object.keys(pack.cmd || {}).length
       },
       data: pack
     };
@@ -581,30 +714,33 @@
     write(read().filter(function (p) { return p.id !== id; }));
   }
 
-  /* 全量导出：把当前 D 打包成一个包，可备份、可发给别人、也可喂给 AI 让它照格式续写 */
+  /* 全量导出：把当前 D 和用户自己的积累一起打包。
+     之前只导出部分字段，导致「全量备份」导回去后收藏、变量值、
+     剧本和任务字段都丢了。这里统一深拷贝，不做手工字段白名单。 */
   function exportAll() {
+    function clone(x) { return JSON.parse(JSON.stringify(x == null ? null : x)); }
+    var C = window.CodeAtlas || {};
+    var userdata = {
+      values: C.values || {},
+      favorites: C.favorites || [],
+      task: C.taskProgress || {}
+    };
     var pack = {
       id: 'export-all', name: D.meta.name + ' 全量导出', version: '1',
-      desc: '由码典导出的完整内容，可原样导入到另一台设备。',
+      desc: '由码典导出的完整内容：知识、任务、剧本和本机进度，可原样导入到另一台设备。',
       /* 自己导出的包带 overwrite：导回来时按 id 就地替换，
-         不这么做的话「导出 → 改 → 导回」会被 195 个 id 重名全挡掉。 */
+         不这么做的话「导出 → 改 → 导回」会被大量重名 id 全挡掉。 */
       overwrite: true,
-      categories: D.categories.map(function (c) {
+      categories: clone(D.categories || []).map(function (c) {
         return {
-          id: c.id, name: c.name, icon: c.icon || 'code', short: c.short || c.name, ext: c.ext || 'txt',
-          items: c.items.map(function (i) {
-            var o = { id: i.id, title: i.title, desc: i.desc, tags: i.tags || [], code: i.code, vars: i.vars || {} };
-            if (i.level) o.level = i.level;
-            if (i.topic) o.topic = i.topic;
-            if (i.variants) o.variants = i.variants;
-            if (i.docs) o.docs = i.docs;
-            if (i.flow) o.flow = i.flow;
-            return o;
-          })
+          id: c.id, name: c.name, icon: c.icon || 'code', short: c.short || c.name,
+          ext: c.ext || 'txt', items: c.items || []
         };
       }),
-      labs: D.labs || [], presets: D.presets || [], flows: D.flows || [],
-      cmd: D.cmd || {}, keywords: D.keywords || []
+      labs: clone(D.labs || []), presets: clone(D.presets || []),
+      flows: clone(D.flows || []), recipes: clone(D.recipes || []),
+      cmd: clone(D.cmd || {}), cmdSrc: clone(D.cmdSrc || {}),
+      keywords: clone(D.keywords || []), userdata: userdata
     };
     return pack;
   }

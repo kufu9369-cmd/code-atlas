@@ -120,13 +120,42 @@ let topoNodeCount = 0;
   (l.plan || []).forEach(function (r) { if (!r.dev) warns.push('lab ' + l.id + ' plan 有行没写 dev'); });
 });
 
-/* ---------- 4. 预设 ---------- */
-(D.presets || []).forEach(function (p) {
-  if (!(p.steps || []).length) errors.push('preset ' + p.id + ' 没有步骤');
-  (p.steps || []).forEach(function (s, i) {
-    if (!s.ref) errors.push('preset ' + p.id + ' steps[' + i + '] 缺少 ref');
-    else if (!snipIds[s.ref]) errors.push('preset ' + p.id + ' steps[' + i + '] 引用不存在的片段：' + s.ref);
+/* ---------- 4. 预设 / 可执行任务 ---------- */
+function checkTask(p) {
+  const t = p.task;
+  const where = 'task ' + p.id;
+  const env = t.env || {};
+  const devIds = {};
+  (t.devices || []).forEach(function (d, i) {
+    if (!d.id) errors.push(where + ' devices[' + i + '] 缺少 id');
+    else devIds[d.id] = 1;
   });
+  if (!(t.steps || []).length) errors.push(where + ' 没有步骤');
+  (t.steps || []).forEach(function (s, i) {
+    if (!s.title) errors.push(where + ' steps[' + i + '] 缺少 title');
+    if (!s.code) errors.push(where + ' steps[' + i + '] 缺少 code');
+    if (!s.who) errors.push(where + ' steps[' + i + '] 缺少 who');
+    else if (!devIds[s.who]) errors.push(where + ' steps[' + i + '] 指向未声明设备：' + s.who);
+    varCount += checkVars(s.code, env, where + '/step' + i);
+  });
+  (t.verify || []).forEach(function (v, i) {
+    if (!v.cmd) errors.push(where + ' verify[' + i + '] 缺少 cmd');
+    if (!v.hope) errors.push(where + ' verify[' + i + '] 缺少 hope');
+    if (v.who && !devIds[v.who]) errors.push(where + ' verify[' + i + '] 指向未声明设备：' + v.who);
+    if (v.cmd) varCount += checkVars(v.cmd, env, where + '/verify' + i);
+  });
+  if (!(t.verify || []).length) warns.push(where + ' 没有验证清单');
+}
+
+(D.presets || []).forEach(function (p) {
+  if (p.task) checkTask(p);
+  else {
+    if (!(p.steps || []).length) errors.push('preset ' + p.id + ' 没有步骤');
+    (p.steps || []).forEach(function (s, i) {
+      if (!s.ref) errors.push('preset ' + p.id + ' steps[' + i + '] 缺少 ref');
+      else if (!snipIds[s.ref]) errors.push('preset ' + p.id + ' steps[' + i + '] 引用不存在的片段：' + s.ref);
+    });
+  }
   if (!p.summary) warns.push('preset ' + p.id + ' 没有 summary');
 });
 

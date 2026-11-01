@@ -112,9 +112,59 @@
   var VOCAB = null;
   var VOCAB_LIST = null;
 
+  /* 任务（带 task 的预设）和内置剧本共用同一个匹配引擎。
+     任务步骤只有一个来源；这里按任务环境把 {{变量}} 填成用户当前值，
+     所以主界面改了 VLAN，悬浮窗不会还推荐旧的 VLAN 10。 */
+  function taskEnvValues(p) {
+    var vals = {};
+    try { vals = JSON.parse(localStorage.getItem('codeatlas.vals.v1')) || {}; } catch (e) { vals = {}; }
+    var env = {};
+    var defs = (p.task && p.task.env) || {};
+    Object.keys(defs).forEach(function (k) {
+      var key = 'task:' + p.id + '|' + k;
+      env[k] = (key in vals) ? vals[key] : defs[k].value;
+    });
+    return env;
+  }
+
+  function fillEnv(code, env) {
+    return String(code || '').replace(/\{\{([A-Za-z0-9_]+)\}\}/g, function (m, k) {
+      return (k in env) ? env[k] : m;
+    });
+  }
+
+  function taskRecipes() {
+    var out = [];
+    (D.presets || []).forEach(function (p) {
+      if (!p.task || !(p.task.steps || []).length) return;
+      var env = taskEnvValues(p);
+      var steps = [];
+      p.task.steps.forEach(function (s) {
+        String(s.code || '').split('\n').forEach(function (line) {
+          var c = fillEnv(line.trim(), env);
+          if (!c || c.charAt(0) === '#') return;
+          steps.push({ c: c, who: s.who || '', note: s.title || '' });
+        });
+      });
+      out.push({
+        id: 'task:' + p.id,
+        title: p.title,
+        scene: p.summary || '',
+        level: '综合',
+        tags: p.features || [],
+        steps: steps,
+        verify: (p.task.verify || []).map(function (v) {
+          return { cmd: fillEnv(v.cmd, env), hope: v.hope || '', who: v.who || '' };
+        }),
+        pitfalls: []
+      });
+    });
+    return out;
+  }
+
   function recipes() {
-    var r = D.recipes;
-    return Array.isArray(r) ? r : [];
+    var base = Array.isArray(D.recipes) ? D.recipes.slice() : [];
+    return base.concat(taskRecipes());
   }
 
   /* 词汇表只在第一次用时建一次：剧本步骤首词 + 命令词典 key 首词 + 基础动词表 */
@@ -379,13 +429,6 @@
     return out.slice(0, limit);
   }
 
-  /* 去掉 quit / return 之类的导航命令。
-     「下一步」面板是给人照着敲的，冒一句「下一步 quit」纯属浪费眼神。
-     整段模板（parts）里当然还要有，不然代码块就断了。 */
-  function stripNav(arr) {
-    return arr.filter(function (s) { return !NAV_ONLY.test(words(s.c)[0] || ''); });
-  }
-
   /* 主入口。
      onlyId 给定时只在这个剧本里找 —— 面板上「不是这个场景？」切换候选、
      以及直接翻阅某个剧本时用。 */
@@ -434,15 +477,21 @@
     res.matched = top.s.matched;
     res.hit = top.s.hit;
 
-    /* 输入的最后一条是 quit：nav 命令不参与匹配，idx 会停在 quit 的前一步。
-       用户已经退出了接口视图，再提示「下一步 quit」就是废话 —— 往后挪一格。 */
-    var lastIn = p.cmds[p.cmds.length - 1];
-    if (lastIn && NAV_ONLY.test(words(lastIn)[0] || '')) {
-      while (res.idx + 1 < steps.length && NAV_ONLY.test(words(steps[res.idx + 1].c)[0] || '')) {
-        res.idx++;
-      }
+    /* 导航命令不参与相似度匹配，所以按输入末尾实际出现的个数逐一消费。
+       例如 OSPF 需要连续两次 quit：用户只敲完第一次时，下一步仍应是第二次。 */
+    var navLeft = 0;
+    for (var ni = p.cmds.length - 1; ni >= 0; ni--) {
+      if (!NAV_ONLY.test(words(p.cmds[ni])[0] || '')) break;
+      navLeft++;
     }
-    var ahead = stripNav(steps.slice(res.idx + 1));
+    while (navLeft > 0 && res.idx + 1 < steps.length
+      && NAV_ONLY.test(words(steps[res.idx + 1].c)[0] || '')) {
+      res.idx++;
+      navLeft--;
+    }
+    /* quit / return / exit 是切换视图所必需的真实步骤，不能为了「少一条」而跳过。
+       用户已经亲手敲过导航命令时，上面的 while 会先把 idx 移过去。 */
+    var ahead = steps.slice(res.idx + 1);
     res.next = ahead.slice(0, 3).map(function (s, k) {
       return { c: s.c, note: s.note || '', who: s.who || '', lead: k === 0 };
     });
@@ -472,7 +521,7 @@
     recipes().forEach(function (x) { if (x.id === id) r = x; });
     if (!r) return null;
     var steps = r.steps || [];
-    var nav = stripNav(steps);
+    var nav = steps;
     return {
       ok: true, whole: true, view: '', viewLabel: '', ctx: '', cmds: [], dropped: 0,
       recipe: {

@@ -29,7 +29,8 @@ function loadDir(dir, files) {
 }
 
 loadDir('ensp', ['00-base', '10-basic', '20-adv', '30-pro', '40-labs',
-  '50-presets-flows', '60-cmd', '70-cmd-query', '99-merge']);
+  '50-presets-flows', '60-cmd', '70-cmd-query', '80-recipes',
+  '82-recipes-route', '84-recipes-sec', '99-merge']);
 loadDir('javaweb', ['00-base', '10-servlet', '20-jsp', '30-jdbc', '40-mvc',
   '50-deploy', '60-labs', '70-presets-flows', '80-cmd', '99-merge']);
 loadDir('weblegacy', ['00-base', '10-htmlcss', '20-js', '30-jquery', '40-compat',
@@ -109,7 +110,10 @@ const MUST = [
   ['清除浮动', 'snippet', id => id === 'web-float'],
   ['box-sizing', 'snippet', id => id === 'web-box-model'],
   ['事件委托', 'snippet', id => /bubble|tab|delegate/.test(id)],
-  ['跨域', 'snippet', id => id === 'jw-cors']
+  ['跨域', 'snippet', id => id === 'jw-cors'],
+  /* 任务和配置剧本必须能被搜到，而不是只能靠人记得快捷键 */
+  ['小型办公网', 'preset', id => id === 'preset-l3-office'],
+  ['OSPF 单区域', 'recipe', id => id === 'rec-ospf-single']
 ];
 
 console.log('\n--- 断言 ---');
