@@ -63,6 +63,15 @@ contextBridge.exposeInMainWorld('DESKTOP', {
   showMain: () => ipcRenderer.invoke('app:show-main'),
   quit: () => ipcRenderer.send('app:quit'),
 
+  /* 文件保存结果：桌面版导出配置 / 知识包时会弹「另存为」，
+     页面得等主进程回报才知道用户到底存了没 —— 否则只能瞎报「已导出」，
+     而实际上用户可能刚点了取消。d = { state, name, path } */
+  onDownload: (fn) => {
+    const h = (_e, d) => { try { fn(d); } catch (e) {} };
+    ipcRenderer.on('dl:done', h);
+    return () => ipcRenderer.removeListener('dl:done', h);
+  },
+
   /* 主进程主动推送的状态（透明度变化等） */
   onHudState: (fn) => {
     const h = (_e, s) => { try { fn(s); } catch (e) {} };

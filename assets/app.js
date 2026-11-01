@@ -50,6 +50,58 @@
   const favKey = (kind, id) => kind + ':' + id;
   const isFav = (kind, id) => FAV.has(favKey(kind, id));
 
+  /* ---------- 最近打开（key 与收藏同一种写法，最多 20 条） ----------
+     只记「看过哪一条」，不记滚动位置和变量值：变量本来就有自己的一份存储。
+     顺序就是时间顺序，重复打开把已有那条提到最前，不会越积越长。 */
+  const LS_RECENT = 'codeatlas.recent.v1';
+  const RECENT_MAX = 20;
+  let RECENT = [];
+  try {
+    RECENT = (JSON.parse(localStorage.getItem(LS_RECENT)) || [])
+      .filter(x => typeof x === 'string' && x.indexOf(':') > 0);
+  } catch (e) { RECENT = []; }
+
+  function persistRecent() {
+    try { localStorage.setItem(LS_RECENT, JSON.stringify(RECENT)); } catch (e) {}
+  }
+
+  function pushRecent(kind, id) {
+    if (!kind || !id) return;
+    const key = favKey(kind, id);
+    const i = RECENT.indexOf(key);
+    if (i >= 0) RECENT.splice(i, 1);
+    RECENT.unshift(key);
+    if (RECENT.length > RECENT_MAX) RECENT.length = RECENT_MAX;
+    persistRecent();
+    /* 正在看「最近」这一页时才重画，平时浏览不打断 */
+    if (S.view === 'recent') { renderRail(); renderList(); }
+  }
+
+  /* 收藏 / 最近 都是「跨专题的集合视图」：列表是合集，主面板看的是集合里选中的那条 */
+  const isColl = v => v === 'fav' || v === 'recent';
+  function baseView() { return isColl(S.view) ? VMAP[S.favKind] : S.view; }
+
+  /* key -> { kind, item }；找不到（内容被删 / 知识包卸载）就返回 null */
+  function itemOfKey(key) {
+    const i = String(key).indexOf(':');
+    if (i < 0) return null;
+    const kind = key.slice(0, i), id = key.slice(i + 1);
+    if (kind === 'snippet') return ITEMS[id] ? { kind, item: ITEMS[id] } : null;
+    if (kind === 'lab') {
+      const l = (D.labs || []).find(x => x.id === id);
+      return l ? { kind, item: l } : null;
+    }
+    if (kind === 'preset') {
+      const p = D.presets.find(x => x.id === id);
+      return p ? { kind, item: p } : null;
+    }
+    if (kind === 'flow') {
+      const f = D.flows.find(x => x.id === id);
+      return f ? { kind, item: f } : null;
+    }
+    return null;
+  }
+
   /* ---------- 任务进度（按任务 id 存，刷新/重启后接着做） ---------- */
   let TASK = {};
   try { TASK = JSON.parse(localStorage.getItem(LS_TASK)) || {}; } catch (e) { TASK = {}; }
@@ -294,6 +346,7 @@
     x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
     back: svg('<path d="M15 5l-7 7 7 7"/>'),
     star: svg('<path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.85z"/>'),
+    clock: svg('<circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3.2 2.1"/>'),
     sun: svg('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M18.5 5.5l-1.6 1.6M7.1 16.9l-1.6 1.6"/>'),
     moon: svg('<path d="M20.2 14.2A8.5 8.5 0 0 1 9.8 3.8a8.5 8.5 0 1 0 10.4 10.4z"/>'),
     palette: svg('<path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.35 0 1.9-.95 1.45-1.95-.5-1.15.32-2.35 1.75-2.35h1.25a3.55 3.55 0 0 0 3.55-3.55c0-5.05-3.55-9.35-8-9.35z"/><circle cx="8.5" cy="9.3" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.3" cy="7.7" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.7" cy="10.2" r="1.05" fill="currentColor" stroke="none"/>'),
@@ -346,6 +399,10 @@
       h += '<button class="rail-btn rail-next" data-act="hudnext" data-label="下一步"'
         + ' aria-label="打开下一步悬浮窗" title="下一步 · 悬浮窗（Ctrl+Alt+Z）">'
         + ICON.pointer + '<span class="tip">下一步 · 在 eNSP 里卡住时点这里</span></button>';
+    }
+    if (RECENT.length) {
+      h += '<button class="rail-btn' + (S.view === 'recent' ? ' on' : '') + '" data-nav="recent" data-label="最近">'
+        + ICON.clock + '<span class="tip">最近打开 · ' + RECENT.length + ' 条（全站，最多 20）</span></button>';
     }
     h += '<button class="rail-btn' + (S.view === 'fav' ? ' on' : '') + '" data-nav="fav" data-label="收藏">'
       + ICON.star + (FAV.size ? '<span class="dot-fav"></span>' : '')
@@ -403,7 +460,7 @@
     if (!el) return;
     refreshTopics();
     const cats = topicCats(S.topic);
-    if (S.view === 'fav' || cats.length < 2) {
+    if (isColl(S.view) || cats.length < 2) {
       el.hidden = true;
       el.innerHTML = '';
       return;
@@ -440,40 +497,59 @@
     return SEARCH.groups(D, CMD, q, 60);
   }
 
+  const COLL_NAME = { snippet: '代码片段', lab: '实验', preset: '预设库', flow: '工作流' };
+
   function favGroups() {
-    const sn = [], ls = [], ps = [], fs = [];
+    const buckets = { snippet: [], lab: [], preset: [], flow: [] };
     const ord = {};
     D.categories.forEach((c, i) => { ord[c.id] = i; });
     FAV.forEach(k => {
-      const i = k.indexOf(':');
-      const kind = k.slice(0, i), id = k.slice(i + 1);
-      if (kind === 'snippet' && ITEMS[id]) sn.push(ITEMS[id]);
-      else if (kind === 'lab') { const l = (D.labs || []).find(x => x.id === id); if (l) ls.push(l); }
-      else if (kind === 'preset') { const p = D.presets.find(x => x.id === id); if (p) ps.push(p); }
-      else if (kind === 'flow') { const f = D.flows.find(x => x.id === id); if (f) fs.push(f); }
+      const r = itemOfKey(k);
+      if (r) buckets[r.kind].push(r.item);
     });
-    sn.sort((a, b) => ord[a.cat] - ord[b.cat]);
-    const gs = [];
-    if (sn.length) gs.push({ kind: 'snippet', name: '代码片段', items: sn });
-    if (ls.length) gs.push({ kind: 'lab', name: '实验', items: ls });
-    if (ps.length) gs.push({ kind: 'preset', name: '预设库', items: ps });
-    if (fs.length) gs.push({ kind: 'flow', name: '工作流', items: fs });
-    return gs;
+    buckets.snippet.sort((a, b) => ord[a.cat] - ord[b.cat]);
+    return ['snippet', 'lab', 'preset', 'flow']
+      .filter(k => buckets[k].length)
+      .map(k => ({ kind: k, name: COLL_NAME[k], items: buckets[k] }));
+  }
+
+  /* 最近打开：同一套分组，但组内按「最近」排，组与组之间按谁最新被打开排 */
+  function recentGroups() {
+    const buckets = {};
+    const order = [];
+    RECENT.forEach(k => {
+      const r = itemOfKey(k);
+      if (!r) return;
+      if (!buckets[r.kind]) { buckets[r.kind] = []; order.push(r.kind); }
+      buckets[r.kind].push(r.item);
+    });
+    return order.map(k => ({ kind: k, name: COLL_NAME[k] || k, items: buckets[k] }));
+  }
+
+  /* 集合视图共用的分组入口 */
+  function collGroups() {
+    return S.view === 'recent' ? recentGroups() : favGroups();
   }
 
   const LAB_LEVELS = ['入门', '进阶', '综合'];
 
   function groupsForView() {
-    if (S.view === 'fav') return favGroups();
+    if (isColl(S.view)) return collGroups();
     if (S.view === 'cat') {
       const c = D.categories.find(x => x.id === S.cat);
       const items = c ? (c.items || []) : [];
       /* 同一个分类里再按难度分组：70 条一长串不好扫，分组后能直接跳到「进阶」 */
       const levels = LAB_LEVELS.filter(lv => items.some(x => x.level === lv));
       if (levels.length > 1) {
-        return levels.map(lv => ({
+        const gs = levels.map(lv => ({
           kind: 'snippet', name: lv, items: items.filter(x => x.level === lv)
         }));
+        /* 没写 level 的（多半是导入的知识包）单独归一组。
+           以前这些条目会掉进分组缝里 —— 列表上一条都不显示，
+           用户以为「导入失败」，其实是难度分组把它们滤掉了。 */
+        const rest = items.filter(x => LAB_LEVELS.indexOf(x.level) < 0);
+        if (rest.length) gs.push({ kind: 'snippet', name: '未分级', items: rest });
+        return gs;
       }
       return [{ kind: 'snippet', name: c ? c.name : '代码片段', items }];
     }
@@ -506,6 +582,19 @@
   }
 
   /* ---------- 卡片 ---------- */
+  /* 这条内容是内置的还是某个知识包带进来的。
+     每次重画列表时刷一次（见 renderList），不在卡片里现算 ——
+     一屏几十张卡，每张都去遍历所有包会白耗时间。 */
+  let SRC = {};
+  function refreshSrc() {
+    try {
+      SRC = (window.PACKS && window.PACKS.sources) ? window.PACKS.sources() : {};
+    } catch (e) { SRC = {}; }
+  }
+  function srcOf(kind, id) {
+    return SRC[kind + ':' + id] || null;
+  }
+
   function cardHTML(kind, it, on, showKind) {
     let sub = '', tags = [], badge = '';
     if (kind === 'snippet') {
@@ -534,8 +623,11 @@
       badge = Object.keys(it.nodes).filter(k => it.nodes[k].kind === 'end').length + ' 结论';
     }
     const fav = kind !== 'cmd' && kind !== 'recipe' && isFav(kind, it.id);
+    const src = (kind === 'cmd' || kind === 'recipe') ? null : srcOf(kind, it.id);
     return '<button class="card' + (on ? ' on' : '') + '" data-id="' + esc(it.id) + '" data-kind="' + kind + '">'
       + '<span class="card-t">' + hlHit(it.title)
+      + (src ? '<span class="card-src" title="来自知识包《' + esc(src.pack) + '》'
+        + (src.version ? ' v' + esc(src.version) : '') + '">导入</span>' : '')
       + (badge ? '<span class="vcount">' + esc(badge) + '</span>' : '') + '</span>'
       + '<span class="card-d">' + hlHit(sub) + '</span>'
       + '<span class="card-tags">' + tags.slice(0, 4)
@@ -549,13 +641,14 @@
 
   function renderList() {
     const searching = !!S.q;
+    refreshSrc();
     const groups = searching ? searchGroups(S.q) : groupsForView();
     renderCatTabs();
 
     const flat = [];
     groups.forEach(g => g.items.forEach(it => flat.push({ kind: g.kind, id: it.id })));
 
-    let curKind = S.view === 'fav' ? S.favKind
+    let curKind = isColl(S.view) ? S.favKind
       : (S.view === 'cat' ? 'snippet'
         : S.view === 'labs' ? 'lab'
           : S.view === 'presets' ? 'preset' : 'flow');
@@ -595,6 +688,8 @@
         empty = '没有匹配「' + esc(S.q) + '」的内容。<br><span class="dim">可以试试：dis isis · ospf 邻居 · getParameter · 清除浮动 · jQuery ajax</span>';
       } else if (S.view === 'fav') {
         empty = '还没有收藏。卡片右上角的星号就是收藏按钮。';
+      } else if (S.view === 'recent') {
+        empty = '还没有打开过内容。点开任意片段、实验或预设，这里会自动记下来（最多 20 条）。';
       } else if (S.view === 'labs') {
         empty = '「' + esc(tn) + '」还没有实训内容。<br><span class="dim">eNSP 的实验在「网络工程」里，JavaWeb / Web 的动手内容在「预设库」。</span>';
       } else if (S.view === 'presets') {
@@ -620,7 +715,9 @@
     $('#listScroll').innerHTML = h;
     const packN = (window.PACKS && window.PACKS.count) || 0;
     $('#lpFoot').innerHTML = '<span>'
-      + (searching ? '全站 ' + flat.length : (S.view === 'fav' ? '收藏 ' + flat.length : '共 ' + flat.length)) + ' 项</span>'
+      + (searching ? '全站 ' + flat.length
+        : (S.view === 'fav' ? '收藏 ' + flat.length
+          : S.view === 'recent' ? '最近 ' + flat.length : '共 ' + flat.length)) + ' 项</span>'
       + '<button class="foot-btn" data-act="packs" title="导入 / 导出知识包">' + ICON.pack + '知识包'
       + (packN ? '<b>' + packN + '</b>' : '') + '</button>';
   }
@@ -630,9 +727,9 @@
      ============================================================ */
   function renderMain() {
     syncHash();
-    const view = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    const view = baseView();
     /* 收藏是跨专题的，收藏视图里不做专题过滤；其余视图只看当前专题 */
-    const pool = list => (S.view === 'fav' ? (list || []) : scoped(list));
+    const pool = list => (isColl(S.view) ? (list || []) : scoped(list));
     if (view === 'cat') {
       const it = ITEMS[S.sel.cat];
       $('#mainScroll').innerHTML = it ? snippetHTML(it) : emptyHTML('选择左侧任意片段开始');
@@ -709,6 +806,8 @@
 
       + '<div class="toolbar">' + seg + '<div class="acts">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="cfgexport" title="存成文件（去掉 system-view，可直接作为设备配置加载）">'
+      + ICON.pack + '导出 .' + esc(cfgExt(item.cat)) + '</button>'
       + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制代码</button>'
       + '</div></div>'
 
@@ -785,7 +884,10 @@
       + (g.role ? '<span class="task-role">' + esc(g.role) + '</span>' : '')
       + (g.note ? '<span class="task-wire">' + esc(g.note) + '</span>' : '') + '</div>'
       + '<button class="btn ghost task-dev-copy" data-act="taskcopy" data-who="' + esc(g.id) + '">'
-      + ICON.copy + '复制 ' + esc(g.id) + ' 全部</button></div>'
+      + ICON.copy + '复制 ' + esc(g.id) + ' 全部</button>'
+      + '<button class="btn ghost task-dev-copy" data-act="cfgexport" data-who="' + esc(g.id) + '"'
+      + ' title="导出 ' + esc(g.id) + '.cfg（去掉 system-view，可直接作为该设备的配置加载）">'
+      + ICON.pack + '导出 .cfg</button></div>'
       + g.steps.map(({ s, i }) => {
         const done = !!st.done[i];
         return '<div class="task-step' + (done ? ' done' : '') + '">'
@@ -891,6 +993,8 @@
       + (p.scene ? '<p class="lede" style="margin-top:12px;font-size:12.5px;color:var(--tx-3)">适用场景：' + esc(p.scene) + '</p>' : '')
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="cfgexport" title="存成 .cfg（去掉 system-view，可直接作为设备配置加载）">'
+      + ICON.pack + '导出 .cfg</button>'
       + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
       + '</div></div>'
       + '<div class="legendbar"><span class="swatch"></span>每一块琥珀色都是独立的自主配置区；多设备任务请按步骤复制</div>'
@@ -1013,6 +1117,8 @@
       + '</div>'
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="cfgexport" title="存成 .cfg（去掉 system-view，可直接作为设备配置加载）">'
+      + ICON.pack + '导出 .cfg</button>'
       + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
       + '</div></div>'
       + (l.topo && l.topo.nodes && l.topo.nodes.length
@@ -1084,7 +1190,7 @@
     openDocs({ kind: 'cmd', word: word });
   }
   function openCurrentDocs() {
-    const view = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    const view = baseView();
     if (view === 'cat') {
       const it = ITEMS[S.sel.cat];
       if (it) openDocs({ kind: 'item', item: it, name: it.catName });
@@ -1147,8 +1253,16 @@
           ul: r.verify.map(v => v.cmd + (v.hope ? ' → ' + v.hope : ''))
         });
       }
+      const whoSet = Array.from(new Set((r.steps || []).map(s => s.who).filter(Boolean)));
       extra = '<div class="docs-note">这是“下一步”悬浮窗使用的同一份剧本。'
-        + '在桌面端选中 eNSP 里的命令后按快捷键，就能接着往下配。</div>';
+        + '在桌面端选中 eNSP 里的命令后按快捷键，就能接着往下配。</div>'
+        /* 只有单设备的剧本才给导出：多设备整段混在一个 .cfg 里没法加载 */
+        + (whoSet.length <= 1
+          ? '<button class="go-snippet" data-act="cfgexport" data-kind="recipe" data-id="' + esc(r.id) + '"'
+            + (whoSet.length === 1 ? ' data-who="' + esc(whoSet[0]) + '"' : '') + '>'
+            + '导出为 .cfg（可直接作为设备配置）' + ICON.arrow + '</button>'
+          : '<div class="docs-note">这条剧本涉及 ' + whoSet.length + ' 台设备，'
+            + '整段混在一个文件里没法加载，所以按设备导出请到「任务」里做。</div>');
     }
 
     const body = secs.map(s => '<div class="dsec"><h3>' + esc(s.h) + '</h3>'
@@ -1434,13 +1548,122 @@
       return;
     }
 
+    /* 桌面版：主进程会弹「另存为」，结果由 dl:done 回报，这里不抢先报成功 */
+    const desktop = bindDl();
+
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('已下载 ' + Math.round(data.length / 1024) + ' KB');
+    if (!desktop) toast('已下载 ' + Math.round(data.length / 1024) + ' KB');
+  }
+
+  /* ============================================================
+     导出为设备配置文件
+     ------------------------------------------------------------
+     与「复制」的分工：
+       复制 → 粘进命令行，必须保留 system-view（默认在用户视图）
+       导出 → 存成文件给设备加载 / 存档，去掉 system-view（加载时自己会进）
+     这一行的差别写在 exportcfg.js，两边内容同源，不会走岔。
+     ============================================================ */
+  function cfgExt(cat) {
+    return window.CFG ? window.CFG.extOf(cat) : 'cfg';
+  }
+
+  /* 把「当前这页是什么」翻译成导出所需的三样东西：标题、步骤、取值函数 */
+  function exportTarget(act) {
+    const who = (act && act.dataset.who) || '';
+    const kind = act && act.dataset.kind;
+
+    if (kind === 'recipe') {
+      const r = (D.recipes || []).find(x => x.id === act.dataset.id);
+      if (!r) return null;
+      return {
+        title: r.title, cat: 'ensp', who,
+        steps: (r.steps || []).map(s => ({ code: s.c, who: s.who })),
+        plain: code => code
+      };
+    }
+
+    const view = baseView();
+
+    if (view === 'cat') {
+      const it = ITEMS[S.sel.cat];
+      if (!it) return null;
+      const cd = codeDef(it);
+      return {
+        title: it.title, cat: it.cat, who,
+        steps: [{ code: cd.code }],
+        plain: code => plain(it.id, code, cd.vars)
+      };
+    }
+    if (view === 'labs') {
+      const l = (D.labs || []).find(x => x.id === S.sel.labs);
+      if (!l) return null;
+      return {
+        title: l.title, cat: l.cat || 'ensp', who,
+        steps: l.steps || [],
+        plain: code => plain('lab:' + l.id, code, l.vars || {})
+      };
+    }
+    if (view === 'presets') {
+      const p = D.presets.find(x => x.id === S.sel.presets);
+      if (!p) return null;
+      if (p.task) {
+        return {
+          title: p.title, cat: 'ensp', who,
+          steps: p.task.steps || [],
+          plain: code => plain('task:' + p.id, code, p.task.env || {})
+        };
+      }
+      return {
+        title: p.title, cat: 'ensp', who,
+        steps: p.steps.map(st => ({ code: (ITEMS[st.ref] || {}).code || '' })),
+        plain: (code, i) => {
+          const st = p.steps[i], snip = st && ITEMS[st.ref];
+          if (!snip) return '';
+          return plain('p:' + p.id + ':' + i, snip.code, presetVars(snip, st.vars));
+        }
+      };
+    }
+    return null;
+  }
+
+  /* 桌面版保存文件的结果由主进程回报：
+     不接这一路的话，「已导出」只能靠猜 —— 用户点取消也会照样弹成功。 */
+  let dlBound = false;
+  function bindDl() {
+    if (dlBound || !(window.DESKTOP && window.DESKTOP.onDownload)) return false;
+    dlBound = true;
+    window.DESKTOP.onDownload(d => {
+      if (!d) return;
+      if (d.state === 'completed') toast('已保存 ' + d.name + ' → ' + d.path);
+      else if (d.state === 'cancelled') toast('已取消保存');
+      else toast('保存失败（' + d.state + '）');
+    });
+    return true;
+  }
+
+  function exportCfg(act) {
+    if (!window.CFG) { toast('导出模块没加载'); return; }
+    const t = exportTarget(act);
+    if (!t) { toast('这里没有可导出的配置'); return; }
+
+    const out = window.CFG.build({
+      title: t.title, cat: t.cat, who: t.who,
+      steps: t.steps, plain: t.plain, mode: 'file'
+    });
+    if (!out.text.trim()) { toast('当前没有可导出的内容'); return; }
+
+    const desktop = bindDl();   // 桌面版会弹「另存为」，结果走 dl:done
+    window.CFG.save(out.name, out.text).then(ok => {
+      if (desktop) { if (!ok) toast('导出失败，可改用「复制」'); return; }
+      toast(ok
+        ? '已导出 ' + out.name + ' · ' + out.text.trim().split('\n').length + ' 行'
+        : '导出失败，可改用「复制」');
+    });
   }
 
   /* ============================================================
@@ -1545,7 +1768,7 @@
      复制
      ============================================================ */
   function currentText() {
-    const view = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    const view = baseView();
     if (view === 'cat') {
       const it = ITEMS[S.sel.cat];
       if (!it) return '';
@@ -1642,6 +1865,7 @@
   function gotoSnippet(id) {
     const it = ITEMS[id];
     if (!it) return;
+    pushRecent('snippet', id);
     S.view = 'cat'; S.cat = it.cat; S.topic = topicOfCat(it.cat); S.q = ''; $('#q').value = '';
     S.sel.cat = id;
     closeDocs(); closePop();
@@ -1653,6 +1877,7 @@
   function gotoFlow(id) {
     const f = D.flows.find(x => x.id === id);
     if (!f) return;
+    pushRecent('flow', id);
     S.view = 'flows'; S.sel.flows = id; S.q = ''; $('#q').value = '';
     S.topic = topicOfItem(f);
     S.open = new Set([f.root]);
@@ -1665,6 +1890,7 @@
   function gotoPreset(id) {
     const p = D.presets.find(x => x.id === id);
     if (!p) return;
+    pushRecent('preset', id);
     S.view = 'presets'; S.sel.presets = id; S.q = ''; $('#q').value = '';
     S.topic = topicOfItem(p);
     closeDocs(); closePop();
@@ -1676,6 +1902,7 @@
   function gotoLab(id) {
     const l = (D.labs || []).find(x => x.id === id);
     if (!l) return;
+    pushRecent('lab', id);
     S.view = 'labs'; S.sel.labs = id; S.q = ''; $('#q').value = '';
     S.topic = topicOfItem(l);
     closeDocs(); closePop();
@@ -1731,7 +1958,7 @@
         if (r) openDocs({ kind: 'recipe', recipe: r });
         return;
       }
-      if (S.view !== 'fav') {
+      if (!isColl(S.view)) {
         if (kind === 'snippet') {
           S.view = 'cat';
           if (ITEMS[id]) { S.cat = ITEMS[id].cat; S.topic = topicOfCat(S.cat); }
@@ -1901,6 +2128,7 @@
         toast('任务进度已重置');
         return;
       }
+      if (a === 'cfgexport') { exportCfg(act); return; }
       if (a === 'copy') { copyText(currentText()); return; }
       if (a === 'docs') { openCurrentDocs(); return; }
       if (a === 'back') { document.body.classList.remove('detail'); return; }
@@ -1979,7 +2207,7 @@
      ============================================================ */
   function syncHash() {
     const seg = S.view === 'cat' ? S.cat : S.view;
-    const key = S.view === 'fav' ? VMAP[S.favKind] : S.view;
+    const key = baseView();
     const id = S.sel[key] || '';
     const h = '#/' + seg + (id ? '/' + id : '');
     if (location.hash === h) return;
@@ -2006,10 +2234,11 @@
       S.view = 'flows'; S.sel.flows = b;
       S.topic = topicOfItem(D.flows.find(x => x.id === b));
       S.open = new Set([D.flows.find(x => x.id === b).root]);
-    } else if (a === 'fav') {
-      S.view = 'fav';
+    } else if (a === 'fav' || a === 'recent') {
+      S.view = a;
       if (b) {
         if (ITEMS[b]) { S.favKind = 'snippet'; S.sel.cat = b; }
+        else if ((D.labs || []).some(x => x.id === b)) { S.favKind = 'lab'; S.sel.labs = b; }
         else if (D.presets.some(x => x.id === b)) { S.favKind = 'preset'; S.sel.presets = b; }
         else if (D.flows.some(x => x.id === b)) { S.favKind = 'flow'; S.sel.flows = b; }
       }
@@ -2041,8 +2270,19 @@
     taskState, taskText, applyUserdata,
     openPacks, closePacks, runPackCheck, doPackInstall,
     closeDocs, closePop,
+    /* 导出预览：不在界面上下发文件，只回「文件名 + 内容」，
+       给界面回归用（点按钮会真往下载目录写文件，测试不该留垃圾） */
+    cfgPreview(who) {
+      const t = exportTarget({ dataset: { who: who || '' } });
+      if (!t) return null;
+      return window.CFG.build({
+        title: t.title, cat: t.cat, who: t.who,
+        steps: t.steps, plain: t.plain, mode: 'file'
+      });
+    },
     get FAV() { return FAV; },
     get favorites() { return [...FAV]; },
+    get recent() { return RECENT.slice(); },
     get values() { return Object.assign({}, VAL); },
     get taskProgress() { return JSON.parse(JSON.stringify(TASK)); },
     get PACKS() { return window.PACKS; }

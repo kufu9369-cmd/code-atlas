@@ -38,7 +38,15 @@
 
   function collectIds(d) {
     var out = {};
-    (d.categories || []).forEach(function (c) {
+    /* 归一化之后的包用 cats（每个元素是 {def, items}），原始 JSON 用 categories。
+       只认一个有实际后果：导入第二个包时的 id 查重、以及卡片「导入」标记的来源映射，
+       都会对已装的包视而不见。两个都认。 */
+    var cats = d.categories || [];
+    if (d.cats && d.cats.length) {
+      cats = cats.concat(d.cats.map(function (c) { return { id: (c.def || {}).id, items: c.items || [] }; }));
+    }
+    cats.forEach(function (c) {
+      if (!c || !c.id) return;
       out['cat:' + c.id] = 1;
       (c.items || []).forEach(function (i) { out['snip:' + i.id] = 1; });
     });
@@ -803,6 +811,23 @@
     console.log('[packs] 已加载 ' + booted.length + ' 个知识包：' + booted.map(function (p) { return p.name; }).join('、'));
   }
 
+  /* 每一条「不是内置的」内容属于哪个包：卡片上用它标来源。
+     返回 { 'snippet:xxx': { pack: 包名, version: '1' }, ... }
+     —— 用 snippet 而不是 snip，是为了和收藏 / 最近用的 key 前缀一致。 */
+  var KIND_PREFIX = { cat: 'cat', snip: 'snippet', lab: 'lab', preset: 'preset', flow: 'flow', recipe: 'recipe' };
+  function sourceMap() {
+    var out = {};
+    read().forEach(function (p) {
+      var ids = collectIds(p.data || {});
+      Object.keys(ids).forEach(function (k) {
+        var i = k.indexOf(':');
+        var kind = KIND_PREFIX[k.slice(0, i)] || k.slice(0, i);
+        out[kind + ':' + k.slice(i + 1)] = { pack: p.name, version: p.version };
+      });
+    });
+    return out;
+  }
+
   window.PACKS = {
     KEY: KEY,
     baseIds: function () { return Object.assign({}, BASE_IDS); },
@@ -812,6 +837,7 @@
     install: install,
     remove: remove,
     installed: installed,
+    sources: sourceMap,
     exportAll: exportAll,
     template: template,
     get count() { return read().length; }

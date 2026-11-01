@@ -118,6 +118,129 @@ const CASES = [
     ]
   },
   {
+    name: 'task_export', size: '1440x900',
+    js: `(function(){
+      CodeAtlas.gotoPreset('preset-l3-office');
+      return new Promise(function(res){
+        setTimeout(function(){
+          var pv = CodeAtlas.cfgPreview('SW1');
+          var all = CodeAtlas.cfgPreview('');
+          res({
+            name: pv ? pv.name : '',
+            hasSysview: pv ? pv.text.indexOf('system-view') >= 0 : true,
+            hasAr1: pv ? /sysname AR1/.test(pv.text) : true,
+            hasSw1: pv ? /sysname SW1/.test(pv.text) : false,
+            hasVar: pv ? pv.text.indexOf('{{') >= 0 : true,
+            hasOwn: pv ? pv.text.indexOf('自主') >= 0 : true,
+            lines: pv ? pv.text.trim().split('\\n').length : 0,
+            allName: all ? all.name : '',
+            allHasAr1: all ? /sysname AR1/.test(all.text) : false,
+            btnDev: document.querySelectorAll('[data-act="cfgexport"][data-who]').length
+          });
+        }, 220);
+      });
+    })()`,
+    expect: r => [
+      ['文件名带设备', /-SW1\.cfg$/.test(r.name)],
+      ['导出不含 system-view（加载时会自己进）', r.hasSysview === false],
+      ['只含 SW1 的命令', r.hasSw1 === true && r.hasAr1 === false],
+      ['没有漏替换的变量', r.hasVar === false],
+      ['不带「自主」角标文字', r.hasOwn === false],
+      ['内容不是空的', r.lines >= 10],
+      ['3 台设备各有导出按钮', r.btnDev === 3],
+      ['整份预览含所有设备', r.allHasAr1 === true && /\.cfg$/.test(r.allName)]
+    ]
+  },
+  {
+    name: 'recent_view', size: '1440x900',
+    js: `(function(){
+      CodeAtlas.gotoSnippet('vlan-create');
+      CodeAtlas.gotoPreset('preset-l3-office');
+      CodeAtlas.gotoLab('lab-port-isolate');
+      var list = CodeAtlas.recent.slice();
+      CodeAtlas.gotoView('recent');
+      return new Promise(function(res){
+        setTimeout(function(){
+          var cards = document.querySelectorAll('#listScroll .card');
+          var rail = document.querySelector('[data-nav="recent"]');
+          var foot = document.getElementById('lpFoot');
+          res({
+            count: list.length,
+            first: list[0] || '',
+            order: list.join(','),
+            cards: cards.length,
+            railOn: !!rail && rail.classList.contains('on'),
+            foot: foot ? foot.textContent.trim().slice(0, 12) : '',
+            /* 最近视图里点开一条，应该留在这个视图里，不跳回分类 */
+            stayAfterOpen: (function(){
+              if (!cards.length) return false;
+              cards[0].click();
+              return CodeAtlas.S.view === 'recent';
+            })()
+          });
+        }, 200);
+      });
+    })()`,
+    expect: r => [
+      ['记下 3 条', r.count === 3],
+      ['最近打开排在最前', r.first === 'lab:lab-port-isolate'],
+      ['顺序是后进先出', r.order === 'lab:lab-port-isolate,preset:preset-l3-office,snippet:vlan-create'],
+      ['列表渲染出 3 张卡', r.cards === 3],
+      ['左轨「最近」高亮', r.railOn === true],
+      ['页脚显示最近条数', /最近 3/.test(r.foot)],
+      ['点开后仍留在最近视图', r.stayAfterOpen === true]
+    ]
+  },
+  {
+    name: 'pack_source', size: '1440x900',
+    js: `(function(){
+      var pack = {
+        id: 'probe-src', name: '探针来源包', version: '9.1',
+        categories: [{ id: 'ensp', name: '华为 eNSP', items: [
+          { id: 'probe-src-snip', title: '探针片段（导入的）', desc: '只用来验证来源标记',
+            tags: ['探针'], code: 'display clock', vars: {} }
+        ] }]
+      };
+      var n = window.PACKS.normalize(JSON.stringify(pack));
+      if (!n || n.errors.length) return { error: (n && n.errors || []).join(' / ') || 'normalize 失败' };
+      window.PACKS.install(n.pack);
+      window.PACKS.apply(window.CODEATLAS, n.pack);
+      /* 搜出来看：列表一屏几十条，截图里定位不到，搜索能把它顶到第一条 */
+      var q = document.getElementById('q');
+      q.value = '探针片段';
+      q.dispatchEvent(new Event('input', { bubbles: true }));
+      return new Promise(function(res){
+        setTimeout(function(){
+          var imported = document.querySelector('.card[data-id="probe-src-snip"]');
+          var builtin = document.querySelector('.card[data-id="vlan-create"]');
+          var src = window.PACKS.sources();
+          res({
+            card: !!imported,
+            badge: imported ? !!imported.querySelector('.card-src') : false,
+            badgeText: imported && imported.querySelector('.card-src')
+              ? imported.querySelector('.card-src').textContent : '',
+            badgeTitle: imported && imported.querySelector('.card-src')
+              ? imported.querySelector('.card-src').title : '',
+            builtinBadge: builtin ? !!builtin.querySelector('.card-src') : null,
+            mapHas: !!src['snippet:probe-src-snip'],
+            mapPack: (src['snippet:probe-src-snip'] || {}).pack || '',
+            mapBuiltin: !!src['snippet:vlan-create'],
+            builtinCard: !!builtin
+          });
+        }, 220);
+      });
+    })()`,
+    expect: r => [
+      ['导入的片段出现在列表里', r.card === true && !r.error],
+      ['卡片上有「导入」标记', r.badge === true && r.badgeText === '导入'],
+      ['悬停能看到包名与版本', /探针来源包/.test(r.badgeTitle) && /9\.1/.test(r.badgeTitle)],
+      ['搜索到导入的条目', r.card === true],
+      ['内置内容不标记', r.builtinBadge === false || r.builtinCard === false],
+      ['来源映射里有这条', r.mapHas === true && r.mapPack === '探针来源包'],
+      ['内置内容不在来源映射里', r.mapBuiltin === false]
+    ]
+  },
+  {
     name: 'task_fav_search', size: '1440x900',
     js: `(function(){
       CodeAtlas.gotoSnippet('vlan-create');

@@ -961,6 +961,58 @@ function createWindow() {
   return win;
 }
 
+/* ---------------- 文件保存（导出配置 / 知识包） ----------------
+   页面里用的是 <a download> + blob。Electron 不会自己挑保存路径：
+   不挂 will-download 的话，下载会被 Chromium 当成「没有目标」，状态是
+   cancelled —— 页面那边 toast 照报「已导出」，磁盘上什么都没有。
+   （v1.1.5 之前的「导出全量 JSON」就是这个状态。）
+
+   所以这里必须自己 setSavePath：
+   - 正常情况弹系统的「另存为」，用户决定放哪儿；
+   - CODEATLAS_SHOT 截图 / 自动化模式下不弹框（会卡住流程），直接落下载目录。 */
+function bindDownload() {
+  const { session, dialog } = require('electron');
+
+  session.defaultSession.on('will-download', (e, item, wc) => {
+    const name = item.getFilename() || 'codeatlas.txt';
+    const ext = (path.extname(name) || '').replace('.', '').toLowerCase();
+    const defaultPath = path.join(app.getPath('downloads'), name);
+
+    let target = '';
+    if (SHOT) {
+      target = defaultPath;
+    } else {
+      const filters = ext ? [{ name: ext.toUpperCase() + ' 文件', extensions: [ext] }] : [];
+      try {
+        target = dialog.showSaveDialogSync(wc && !wc.isDestroyed() ? BrowserWindow.fromWebContents(wc) : win, {
+          title: '保存文件',
+          defaultPath,
+          filters: filters.concat([{ name: '所有文件', extensions: ['*'] }]),
+          properties: ['createDirectory', 'showOverwriteConfirmation']
+        }) || '';
+      } catch (err) {
+        log('[dl] 另存为对话框失败：' + err.message);
+        target = defaultPath;
+      }
+    }
+
+    if (!target) {
+      item.cancel();
+      log('[dl] 用户取消 ' + name);
+      if (wc && !wc.isDestroyed()) wc.send('dl:done', { state: 'cancelled', name });
+      return;
+    }
+
+    item.setSavePath(target);
+    item.once('done', (ev, state) => {
+      log('[dl] ' + name + ' -> ' + state + ' ' + target);
+      if (wc && !wc.isDestroyed()) {
+        wc.send('dl:done', { state, name, path: target });
+      }
+    });
+  });
+}
+
 /* ---------------- 生命周期 ---------------- */
 app.whenReady().then(() => {
   if (!gotLock) return;   // 第二个实例：已经 quit 过了，不再建窗口
@@ -972,6 +1024,7 @@ app.whenReady().then(() => {
   log('[proto] 已注册 ' + SCHEME + ':// -> ' + ROOT);
   buildMenu();
   bindIpc();
+  bindDownload();
   registerHudKey();
   buildTray();
 

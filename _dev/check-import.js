@@ -462,6 +462,35 @@ function urlPack(u) {
     r.errors.join(' / ') || JSON.stringify(item && item.docs));
 }
 
+/* ---------- 来源标记 / 已装包的查重 ----------
+   这两件事都靠 collectIds 认得出「已装包里的 id」。
+   归一化后的包用 cats（{def, items}），原始 JSON 用 categories ——
+   只认后者的话：卡片上的「导入」标记永远不出现，
+   第二个包和第一个包用同一个片段 id 也查不出来。 */
+{
+  const mk = (id, name, snipId) => P.normalize(JSON.stringify({
+    id, name, version: '2',
+    categories: [{ id: 'ensp', name: '华为 eNSP', items: [
+      { id: snipId, title: '来源检查', desc: 'D', code: 'display clock' }] }]
+  }));
+
+  const a = mk('src-check', '来源检查包', 'src-check-snip');
+  ok('来源检查包归一化通过', a.pack && !a.errors.length, (a.errors || []).join(' / '));
+  P.install(a.pack);
+
+  const src = P.sources();
+  ok('已装包的条目出现在来源映射里', !!src['snippet:src-check-snip']);
+  ok('映射带上包名，卡片才标得出处',
+    (src['snippet:src-check-snip'] || {}).pack === '来源检查包',
+    JSON.stringify(src['snippet:src-check-snip']));
+  ok('内置内容不进来源映射', !src['snippet:vlan-create']);
+
+  const b = mk('src-dup', '撞车包', 'src-check-snip');
+  const bad = P.conflicts(b.pack);
+  ok('第二个包用同一个片段 id 会被查重拦住',
+    bad.some(x => x.indexOf('src-check-snip') >= 0), JSON.stringify(bad));
+}
+
 /* ---------- 汇总 ---------- */
 console.log('\n=== 汇总 ===');
 console.log('通过 ' + pass + ' / 失败 ' + fail);

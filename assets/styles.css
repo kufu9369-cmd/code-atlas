@@ -436,6 +436,17 @@ a:hover { text-decoration: underline; }
   color: var(--amber); background: var(--amber-d);
   border: 1px solid rgba(255,180,84,.22);
 }
+/* 来源标记：这条不是内置的，是某个知识包带进来的。
+   不抢眼（灰底），但和琥珀色的「N 自主」分得开 —— 一个说来源，一个说可改性。 */
+.card-t .card-src {
+  flex: none;
+  font-family: var(--sans); font-size: 9px; line-height: 1;
+  letter-spacing: .04em;
+  padding: 3px 5px; border-radius: 5px;
+  color: var(--tx-3);
+  background: var(--wash-2);
+  border: 1px solid var(--wash-3);
+}
 .card-d {
   margin-top: 3px; font-size: 12px; color: var(--tx-3); line-height: 1.55;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
