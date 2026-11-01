@@ -71,16 +71,34 @@ def crop_art(im):
     return im.crop((xs[0] + 1, ys[0] + 1, xs[-1], ys[-1]))
 
 
+def defringe(im, band=8, rounds=30):
+    """把最外圈的颜色换成往里几像素的颜色。
+
+    原图圆角处自带一道浅色描边（叠上白底的抗锯齿也有贡献），留在图标边上，
+    放到深色背景下就是一道灰弧。收遮罩只能切掉一部分，收多了轮廓会瘦，
+    所以改成「扩散补色」：把 band 像素以外的颜色钉住，外面往内吸，
+    半透明的边缘像素于是拿到的是内侧的深色，而不是白底的白。
+    """
+    a = im.getchannel('A')
+    core = a.filter(ImageFilter.MinFilter(band * 2 + 1))
+    rgb = im.convert('RGB')
+    cur = Image.composite(rgb, Image.new('RGB', im.size, (0, 0, 0)), core)
+    for _ in range(rounds):
+        cur = Image.composite(cur, cur.filter(ImageFilter.GaussianBlur(3)), core)
+    out = cur.convert('RGBA')
+    out.putalpha(a)
+    return out
+
+
 def build_master():
     """1024 透明底主图：圆角方块本体。4 倍超采样出遮罩，边缘才干净。"""
     art = crop_art(Image.open(LOGO).convert('RGB'))
     # 原图外接框不是严格正方形（1092×1101），先拉成正方形，0.8% 的形变肉眼无感
     S = 4096
     big = art.resize((S, S), Image.LANCZOS)
-    # inset 10/4096 ≈ 1024 下的 2.5px：原图白底的抗锯齿会留一圈浅色描边，
-    # 放在深色背景上看就是一道灰弧，遮罩往里收一点正好切掉
-    big.putalpha(rounded_mask(S, int(S * CORNER), inset=int(S * 0.0025)))
-    return big.resize((1024, 1024), Image.LANCZOS)
+    # 留 1px（1024 下）余量，避免遮罩落在原图阈值边界外面
+    big.putalpha(rounded_mask(S, int(S * CORNER), inset=int(S * 0.001)))
+    return defringe(big.resize((1024, 1024), Image.LANCZOS))
 
 
 def build_bleed():
@@ -93,14 +111,15 @@ def build_bleed():
     透明角会顺着周围真实的底色长出来 —— 比按上下边缘插值准，因为这张图的
     底色不光上下有渐变，左右也有，只按一个方向补会在接缝处对不上。
     """
-    n = 128
+    n = 160
     rgb = MASTER.convert('RGB').resize((n, n), Image.LANCZOS)
     known = MASTER.getchannel('A').resize((n, n), Image.LANCZOS) \
         .point(lambda v: 255 if v > 200 else 0)
     cur = rgb
-    # 球差一样的收敛速度：半径 4、200 轮，角上取到的色和同高度真实底色差 1 个色阶
-    for _ in range(200):
-        cur = Image.composite(cur, cur.filter(ImageFilter.GaussianBlur(4)), known)
+    # 半径 8、300 轮：角点到已知区约 11px，σ 累积到 138，收敛得干净
+    # （半径 4 / 200 轮时角上差 10 个色阶，肉眼是一块发暗的角）
+    for _ in range(300):
+        cur = Image.composite(cur, cur.filter(ImageFilter.GaussianBlur(8)), known)
     bg = cur.resize((MASTER.width, MASTER.height), Image.LANCZOS).convert('RGBA')
     return Image.alpha_composite(bg, MASTER)
 
