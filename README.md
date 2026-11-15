@@ -256,7 +256,7 @@ MPLS 实验两个 CE 同网段导致实验根本不成立。这些都在 v1.1.5 
 | 方式 | 怎么做 | 适合 |
 |---|---|---|
 | 直接开网页 | 双击 `index.html`（Chrome / Edge） | 只想看看效果 |
-| 装桌面版 | 跑 `dist/CodeAtlas-Setup-1.1.6.exe` 安装 | 日常使用，独立窗口、快捷方式 |
+| 装桌面版 | 跑 `dist/CodeAtlas-Setup-1.2.1.exe` 安装 | 日常使用，独立窗口、快捷方式 |
 | 开发模式 | `npm install` 后 `npm start` | 改代码，改完 `Ctrl+R` 即刷新 |
 
 ### 手机
@@ -566,7 +566,7 @@ npm run dist       # 出安装包，产物在 dist/
 
 | 产物 | 说明 |
 |---|---|
-| `dist/CodeAtlas-Setup-1.1.6.exe` | 安装版，可选目录、建桌面和开始菜单快捷方式 |
+| `dist/CodeAtlas-Setup-1.2.1.exe` | 安装版，可选目录、建桌面和开始菜单快捷方式 |
 | `dist/app-debug.apk` | Android debug 签名包（同 `android/app/build/outputs/apk/debug/` 那份） |
 
 > **换了图标但桌面还是旧的？** Windows 的图标缓存按**路径**记，不比对文件改没改，
