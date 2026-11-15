@@ -323,11 +323,59 @@
     return out;
   }
 
+  /* ---------- 把一条内容翻成「练习场」能用的命令序列 ----------
+     剧本 / 预设 / 实验三种内容里，只有剧本和三者的步骤能落到具体命令上。
+     变量在这里就先替换成当前用户选的值（就是页面上看到的那份代码），
+     练习场拿到的必须是「能直接敲」的一行，不带 <占位符>、不带中文。
+     返回 null 表示这套内容没法逐条演练，别硬塞进去。 */
+  function practiceSteps(ref) {
+    const i = String(ref || '').indexOf(':');
+    if (i < 0) return null;
+    const kind = ref.slice(0, i), id = ref.slice(i + 1);
+    let title = '', steps = [];
+
+    if (kind === 'recipe') {
+      const r = (D.recipes || []).find(x => x.id === id);
+      if (!r) return null;
+      title = r.title;
+      steps = (r.steps || []).map(s => ({ c: s.c, note: s.note || '' }));
+    } else if (kind === 'preset') {
+      const p = D.presets.find(x => x.id === id);
+      if (!p) return null;
+      title = p.title;
+      if (p.task) {
+        steps = (p.task.steps || []).map(s => ({
+          c: plain('task:' + p.id, s.code, p.task.env || {}),
+          note: s.why || s.tip || ''
+        }));
+      } else {
+        (p.steps || []).forEach((st, k) => {
+          const snip = ITEMS[st.ref];
+          if (!snip) return;
+          steps.push({
+            c: plain('p:' + p.id + ':' + k, snip.code, presetVars(snip, st.vars)),
+            note: st.note || snip.title
+          });
+        });
+      }
+    } else if (kind === 'lab') {
+      const l = (D.labs || []).find(x => x.id === id);
+      if (!l) return null;
+      title = l.title;
+      steps = (l.steps || []).map(s => ({
+        c: plain('lab:' + l.id, s.code, l.vars || {}),
+        note: s.title || ''
+      }));
+    }
+    /* 带 # 注释、带中文、带 <占位符> 的行整句丢掉：粘进终端只会报错 */
+    steps = steps.filter(s => s.c && !/[<>#]/.test(s.c) && !/[\u4e00-\u9fa5]/.test(s.c));
+    return steps.length ? { title, steps } : null;
+  }
+
   /* ============================================================
      图标
      ============================================================ */
-  const svg = p => '<svg viewBox="0 0 24 24">' + p + '</svg>';
-  const ICON = {
+  const svg = p => '<svg viewBox="0 0 24 24">' + p + '</svg>';  const ICON = {
     switch: svg('<rect x="2.8" y="8.5" width="18.4" height="7" rx="1.8"/><path d="M6 19h5M8.5 15.5V19M15 15.5V19M15.5 12h3.5"/>'),
     term: svg('<rect x="2.8" y="4.4" width="18.4" height="15.2" rx="2.2"/><path d="M6.6 9.4l2.4 2.4-2.4 2.4M11.8 14.4h4.2"/>'),
     db: svg('<ellipse cx="12" cy="6" rx="7.2" ry="2.8"/><path d="M4.8 6v6c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8V6"/><path d="M4.8 12v6c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-6"/>'),
@@ -355,6 +403,9 @@
     flask: svg('<path d="M9.4 3.4v6.2L4.9 17a2.1 2.1 0 0 0 1.85 3.15h10.5A2.1 2.1 0 0 0 19.1 17l-4.5-7.4V3.4"/><path d="M8.2 3.4h7.6"/><path d="M7.3 13.8h9.4"/>'),
     pack: svg('<path d="M12 3.6v9.4M8.3 9.2l3.7 3.8 3.7-3.8"/><path d="M4.5 15.2v2.6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2.6"/>'),
     pointer: svg('<path d="M6.4 3.6l11.4 9.8-5.2.8-1.5 5.1z"/><path d="M14.2 15.5l2.8 4.2"/>'),
+    /* 演练 / 练习场：三角播放键。别再用 term —— 那已经是「系统与脚本」专题的图标，
+       左轨上两个一样的终端图标，用户分不出哪个是专题哪个是工具。 */
+    play: svg('<path d="M8.2 4.6l10.6 7.4-10.6 7.4z"/>'),
     arrow: '<span class="ar">›</span>'
   };
 
@@ -399,6 +450,10 @@
       + ICON.layers + '<span class="tip">预设库 · ' + preN + ' 套（当前专题）</span></button>';
     h += '<button class="rail-btn' + (S.view === 'flows' ? ' on' : '') + '" data-nav="flows" data-label="流程">'
       + ICON.branch + '<span class="tip">工作流 · ' + flowN + ' 条（当前专题）</span></button>';
+    /* 练习场：不是一个「视图」，是全屏浮层（自己管自己的 DOM 和键盘），
+       所以不走 data-nav，走 data-act 交给 assets/practice.js。 */
+    h += '<button class="rail-btn" data-act="practice" data-label="练习">'
+      + ICON.play + '<span class="tip">练习场 · 敲一遍命令，敲错当场告诉你错在哪（Ctrl+Alt+P）</span></button>';
     if (window.DESKTOP && window.DESKTOP.hud) {
       h += '<button class="rail-btn rail-next" data-act="hudnext" data-label="下一步"'
         + ' aria-label="打开下一步悬浮窗" title="下一步 · 悬浮窗（Ctrl+Alt+Z）">'
@@ -953,6 +1008,8 @@
       + (p.features || []).map(f => '<span class="chip">' + esc(f) + '</span>').join('') + '</div>'
       + '<div class="toolbar task-toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="practice-run" data-pre="preset:' + esc(p.id) + '"'
+      + ' title="把这套步骤排成队列，在练习场里一条条敲">' + ICON.play + '演练</button>'
       + '<button class="btn ghost" data-act="taskreset">恢复未开始</button>'
       + '<span class="task-saved">进度自动保存在本机</span>'
       + '</div></div>'
@@ -1003,6 +1060,8 @@
       + (p.scene ? '<p class="lede" style="margin-top:12px;font-size:12.5px;color:var(--tx-3)">适用场景：' + esc(p.scene) + '</p>' : '')
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="practice-run" data-pre="preset:' + esc(p.id) + '"'
+      + ' title="把这套步骤排成队列，在练习场里一条条敲">' + ICON.play + '演练</button>'
       + '<button class="btn ghost" data-act="cfgexport" title="存成 .cfg（去掉 system-view，可直接作为设备配置加载）">'
       + ICON.pack + '导出 .cfg</button>'
       + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
@@ -1127,6 +1186,8 @@
       + '</div>'
       + '<div class="toolbar"><div class="acts" style="margin-left:0;width:100%">'
       + '<button class="btn ghost" data-act="docs">' + ICON.book + '官方解答</button>'
+      + '<button class="btn ghost" data-act="practice-run" data-pre="lab:' + esc(l.id) + '"'
+      + ' title="把这套步骤排成队列，在练习场里一条条敲">' + ICON.play + '演练</button>'
       + '<button class="btn ghost" data-act="cfgexport" title="存成 .cfg（去掉 system-view，可直接作为设备配置加载）">'
       + ICON.pack + '导出 .cfg</button>'
       + '<button class="btn primary" data-act="copy">' + ICON.copy + '复制全部步骤</button>'
@@ -1272,7 +1333,9 @@
             + (whoSet.length === 1 ? ' data-who="' + esc(whoSet[0]) + '"' : '') + '>'
             + '导出为 .cfg（可直接作为设备配置）' + ICON.arrow + '</button>'
           : '<div class="docs-note">这条剧本涉及 ' + whoSet.length + ' 台设备，'
-            + '整段混在一个文件里没法加载，所以按设备导出请到「任务」里做。</div>');
+            + '整段混在一个文件里没法加载，所以按设备导出请到「任务」里做。</div>')
+        + '<button class="go-snippet" data-act="practice-run" data-pre="recipe:' + esc(r.id) + '">'
+        + '拿去练习场敲一遍' + ICON.arrow + '</button>';
     }
 
     const body = secs.map(s => '<div class="dsec"><h3>' + esc(s.h) + '</h3>'
@@ -2282,6 +2345,8 @@
     currentText,
     toggleFav, applySkin, openSkins, closeSkins, searchGroups, favGroups,
     taskState, taskText, applyUserdata,
+    /* 练习场要的「这套内容能不能逐条敲」由逻辑层算，practice.js 只负责显示 */
+    practiceSteps,
     openPacks, closePacks, runPackCheck, doPackInstall,
     closeDocs, closePop,
     /* 导出预览：不在界面上下发文件，只回「文件名 + 内容」，

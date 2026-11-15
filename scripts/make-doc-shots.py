@@ -25,6 +25,23 @@ CASES = [
     ('task',        '1440x1100', 'CodeAtlas.gotoPreset("preset-l3-office"); 1'),
     ('skins',       '1440x900', 'document.querySelector("[data-skin-open]").click(); 1'),
     ('skin-nord',   '1440x900', 'window.SKINS.apply("nord", true); CodeAtlas.gotoSnippet("vlan-create"); 1'),
+    # 练习场：先照着剧本敲六步（左栏的勾要跟终端里的命令对得上），
+    # 再把命令库搜一下子，否则右边会停在「正在加载」——
+    # dict.js 是懒加载的 3 MB，得等它真进来再截图。
+    ('practice',    '1440x900',
+     '(async function(){'
+     'var P=window.PRACTICE;P.open();P.reset();'
+     'var r=CODEATLAS.recipes.filter(function(x){return x.id==="rec-vlan-trunk"})[0];'
+     'P.load(r.steps.map(function(s){return {c:s.c,note:s.note}}),r.title);'
+     'r.steps.slice(0,6).forEach(function(s){P.exec(s.c)});'
+     'P.exec("display current-configuration");'
+     'var q=document.getElementById("prLibQ");q.value="ospf cost";'
+     'q.dispatchEvent(new Event("input",{bubbles:true}));'
+     'await new Promise(function(z){setTimeout(z,2500)});'
+     'document.querySelector("#prDetail")&&document.querySelector("#prLibList .pr-item")&&document.querySelector("#prLibList .pr-item").click();'
+     'await new Promise(function(z){setTimeout(z,300)});'
+     'var sc=document.getElementById("prScreen");sc.scrollTop=sc.scrollHeight;'
+     'return 1})()'),
 ]
 
 

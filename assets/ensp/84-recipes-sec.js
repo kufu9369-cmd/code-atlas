@@ -206,13 +206,14 @@
       steps: [
         { c: 'system-view' },
         { c: 'mpls lsr-id 1.1.1.1', note: '全网唯一，建议用 Loopback 地址，必须先配这个才能开 mpls' },
-        { c: 'mpls', note: '全局使能' },
-        { c: 'mpls ldp', note: '全局使能 LDP' },
-        { c: 'quit' },
+        { c: 'mpls', note: '进 MPLS 视图，全局使能' },
+        { c: 'mpls ldp', note: '全局使能 LDP（这行会把提示符变成 [AR-mpls-ldp]）' },
+        { c: 'quit', note: '退回 MPLS 视图' },
+        { c: 'quit', note: '再退一步回系统视图 —— 少了这行下面的 interface 会在 MPLS 视图里敲，真机直接报错' },
         { c: 'interface GigabitEthernet0/0/0' },
         { c: 'mpls', note: '接口上再开一次，不配这行标签出不去' },
         { c: 'mpls ldp' },
-        { c: 'quit' },
+        { c: 'quit', note: '回系统视图，接下来两条查看命令在哪敲都行' },
         { c: 'display mpls ldp session', note: 'Operational 才算建起来' },
         { c: 'display mpls lsp', note: '看标签转发表项' }
       ],

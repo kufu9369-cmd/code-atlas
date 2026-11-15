@@ -234,12 +234,14 @@
 
     var first = cmd.split(/\s+/)[0].toLowerCase();
 
-    /* `undo xxx` 是有效命令 */
-    var probe = first === 'undo' ? cmd.split(/\s+/)[1] : first;
-    if (!isVerb(probe)) {
-      /* 首词不认，但如果这一行本身是纯参数（IP、数字），也丢掉 */
-      return null;
-    }
+    /* `undo xxx` 一律算命令：undo 后面接什么由用户和设备的命令树决定，
+       不归词表管。原来要拿第二个词去查词表，`undo portswitch` 因为
+       portswitch 不在词表里被整行丢掉 —— 交换机改三层口必敲的一句，
+       丢了之后「下一步」就会把 undo portswitch 当成还没敲，卡在原地。 */
+    if (first === 'undo') return { cmd: cmd.replace(/\s+/g, ' '), view: view, ctx: ctx };
+
+    /* 首词不认，但如果这一行本身是纯参数（IP、数字），也丢掉 */
+    if (!isVerb(first)) return null;
 
     return { cmd: cmd.replace(/\s+/g, ' '), view: view, ctx: ctx };
   }
@@ -454,6 +456,11 @@
     });
     list.sort(function (a, b) {
       if (b.s.score !== a.s.score) return b.s.score - a.s.score;
+      /* 同一个剧本里同一段命令可能重复出现（两台接口各配一遍、两个区域各放一遍）。
+         分数打平时如果还按「起点靠前」选，就会把已经配到第二段的人往回指。
+         用户是在往前配的，所以同一剧本内选更靠后的那段；跨剧本仍按起点靠前
+         （越靠近开头越说明这就是他刚开始做的那个场景）。 */
+      if (a.r === b.r) return b.s.last - a.s.last;
       return a.s.start - b.s.start;
     });
 

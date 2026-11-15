@@ -17,7 +17,8 @@ global.window = {};
 require('../assets/data.js');
 require('../assets/topics.js');
 ['00-base', '10-basic', '20-adv', '30-pro', '40-labs', '50-presets-flows',
-  '60-cmd', '70-cmd-query', '80-recipes', '82-recipes-route', '84-recipes-sec', '99-merge'
+  '60-cmd', '70-cmd-query', '80-recipes', '82-recipes-route', '84-recipes-sec',
+  '86-recipes-vrp', '99-merge'
 ].forEach(function (f) { require('../assets/ensp/' + f + '.js'); });
 
 const D = window.CODEATLAS;
@@ -25,6 +26,9 @@ const list = D.recipes || [];
 
 const errors = [];
 const warns = [];
+/* 官方导入的剧本没有 pitfalls 的条数（只汇总，不进提醒列表） */
+let officialNoPitfall = 0;
+let officialShort = 0;
 const E = function (m) { errors.push(m); };
 const W = function (m) { warns.push(m); };
 
@@ -64,6 +68,20 @@ const ENTER = [
   [/^ipsec\s+policy\s+/i, 'ipsec-pol']
 ];
 
+/* ENTER 表只回答「这条命令进哪个视图」，答不了「从哪个视图进」。
+   默认都只能在系统视图下敲；下面这几个必须从上一层进 ——
+   在系统视图里敲 `mpls ldp` 真机直接报错，而内核里同一个错误也曾经存在，
+   于是检查器和内核互相印证、一起错（v1.2.1 修的）。 */
+const ENTER_FROM = {
+  'ospf-area': ['ospf'],
+  'bgp-af': ['bgp'],
+  'bgp-vpnv4': ['bgp'],
+  'mpls-ldp': ['mpls']
+};
+
+/* 接口 / VLAN 这类跳转命令，真机允许在别的视图里直接切过去 */
+const ENTER_ANYWHERE = /^(interface|vlan)\s+/i;
+
 /* 只在这些视图里合法（前面的视图 = 父视图，深层视图当然也能敲父视图的命令） */
 const WHERE = [
   [/^port\s+(link-type|default|trunk|hybrid)/i, ['interface']],
@@ -91,7 +109,7 @@ const WHERE = [
   [/^tunnel-protocol/i, ['interface']],
   [/^source\s+/i, ['interface']],
   [/^destination\s+/i, ['interface']],
-  [/^mpls\s+ldp$/i, ['interface', 'system']],
+  [/^mpls\s+ldp$/i, ['interface', 'mpls']],
   [/^ipsec\s+policy\s+\S+$/i, ['interface']],
   [/^authentication-mode\s+(aaa|password|scheme)/i, ['vty']],
   [/^authentication-mode\s+(md5|simple|hmac-sha)/i, ['ospf-area', 'interface']],
@@ -158,8 +176,11 @@ function checkViewChain(rec) {
        否则后面第一次 quit 就会被判成「已经在用户视图了」 */
     if (/^system-view$/i.test(c)) { stack = ['user', 'system']; return; }
 
-    /* 接口视图里的 mpls / mpls ldp 只是使能，不进新视图 */
-    if (stack[stack.length - 1] === 'interface' && /^mpls(\s+ldp)?$/i.test(c)) return;
+    /* 接口视图里的 mpls / mpls ldp 只是使能，不进新视图。
+       ospfv3 <进程> area <区域>、ipsec policy <名> 同理 —— 别被 ENTER 表当成「进视图」，
+       否则会误报「应该在系统视图里敲」。 */
+    if (stack[stack.length - 1] === 'interface'
+      && /^(mpls(\s+ldp)?|ospfv3\s+\d+\s+area|ipsec\s+policy\s+\S+$)/i.test(c)) return;
 
     /* 进子视图 */
     let entered = null;
@@ -167,6 +188,14 @@ function checkViewChain(rec) {
       if (re.test(c)) { entered = view; break; }
     }
     if (entered) {
+      const cur = stack[stack.length - 1];
+      /* 从用户视图直接进子视图 = 剧本省略了 system-view，是容忍的写法，不报 */
+      if (cur !== 'user' && !ENTER_ANYWHERE.test(c)) {
+        const from = ENTER_FROM[entered] || ['system'];
+        if (from.indexOf(cur) < 0) {
+          E(at + ' 应该在 ' + from.join(' / ') + ' 视图里敲，但当前在 ' + cur + ' 视图');
+        }
+      }
       if (stack[stack.length - 1] === 'user' && entered !== 'system') {
         /* 剧本省略了 system-view：不算错，补上按已有层级算 */
         stack = ['user', 'system'];
@@ -229,7 +258,12 @@ list.forEach(function (r, i) {
 
   const steps = r.steps || [];
   if (!steps.length) { E(at + ' 没有任何步骤'); return; }
-  if (steps.length < 4) W(at + ' 只有 ' + steps.length + ' 步，太短了，做不成一条主线');
+  /* 官方导入的单特性剧本本来就短（进视图 → 使能 → 改参数），
+     拿「主线」的标准要求它没意义，只累计不逐条提醒。 */
+  if (steps.length < 4) {
+    if (r.origin === 'official') officialShort++;
+    else W(at + ' 只有 ' + steps.length + ' 步，太短了，做不成一条主线');
+  }
 
   let lastWho = '';
   steps.forEach(function (s, k) {
@@ -258,7 +292,13 @@ list.forEach(function (r, i) {
     if (!v.hope) W(at + ' verify[' + k + '] 缺少 hope');
   });
   if (!(r.verify || []).length) W(at + ' 没有 verify（配完怎么验）');
-  if (!(r.pitfalls || []).length) W(at + ' 没有 pitfalls（最容易错在哪）');
+  if (!(r.pitfalls || []).length) {
+    /* 官方导入的剧本（origin:'official'）只搬了官方文档的步骤顺序，
+       来源里没有「最容易错在哪」这一项。硬编一条是假信息，所以不补，
+       这里只累计条数、最后汇总一句，不刷几百行提醒淹没真正的问题。 */
+    if (r.origin === 'official') officialNoPitfall++;
+    else W(at + ' 没有 pitfalls（最容易错在哪）');
+  }
 
   checkViewChain(r);
   checkWho(r);
@@ -293,6 +333,10 @@ console.log('剧本 ' + list.length + ' 个 / 步骤 ' + stepTotal + ' 步 / 代
   + ' 段（跨设备 ' + multiDevice + ' 个）');
 console.log('平均 ' + (list.length ? (stepTotal / list.length).toFixed(1) : 0) + ' 步/个'
   + ' / 有说明的步骤 ' + noted + ' 步（' + (stepTotal ? Math.round(noted / stepTotal * 100) : 0) + '%）');
+if (officialNoPitfall) {
+  console.log('其中 ' + officialNoPitfall + ' 个是官方导入（origin:official）：不要求 pitfalls'
+    + (officialShort ? '，' + officialShort + ' 个不足 4 步（单特性配置本来就短）' : ''));
+}
 
 if (errors.length) {
   console.log('\n--- 错误 ' + errors.length + ' 条 ---');

@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android%20%7C%20Web-lightgrey)
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
-![Content](https://img.shields.io/badge/content-148%20%E7%89%87%E6%AE%B5%20%C2%B7%2042%20%E5%89%A7%E6%9C%AC%20%C2%B7%20455%20%E8%AF%8D%E6%9D%A1-orange)
+![Content](https://img.shields.io/badge/content-148%20%E7%89%87%E6%AE%B5%20%C2%B7%20166%20%E5%89%A7%E6%9C%AC%20%C2%B7%204569%20%E5%91%BD%E4%BB%A4-orange)
 
 ![主界面](docs/screenshots/home.png)
 
@@ -19,7 +19,7 @@ CodeAtlas 把「哪里必须改」直接标在代码里 —— **固定部分灰
 ### 桌面版：配到一半卡住了，按一次键
 
 在 eNSP 里选中刚敲的几行，按 `Ctrl+Alt+Z`，悬浮窗直接告诉你**下一句该敲什么**，
-以及**这一整段到底怎么写**（可整段复制）。42 条配置剧本、453 步，覆盖二层到 BGP、IPSec、MPLS VPN。
+以及**这一整段到底怎么写**（可整段复制）。166 条配置剧本、1028 步，覆盖二层到 BGP、IPSec、MPLS VPN。
 
 ![下一步面板](docs/screenshots/next-step.png)
 
@@ -28,6 +28,23 @@ CodeAtlas 把「哪里必须改」直接标在代码里 —— **固定部分灰
 | 手机端实验页（带拓扑图） | 窄窗口自动单栏 |
 |---|---|
 | ![手机版](docs/screenshots/mobile-lab.png) | ![窄窗口](docs/screenshots/narrow.png) |
+
+### 练习场：查完就在这儿敲一遍
+
+看懂和敲出来是两件事。左轨那个三角图标（或 `Ctrl+Alt+P`）打开一个**不会连任何设备**的
+VRP 终端：提示符跟着视图走，`Tab` 补全、`?` 看当前视图能敲什么、`↑↓` 翻历史。
+
+- **敲错当场指出错在第几个字符**：报错文案跟真机一样（`Wrong parameter found at '^' position.`），
+  下面再用一句人话补上为什么 —— 比如把子网掩码填成反掩码，它会告诉你「把每一位取反：0.0.0.255 → 255.255.255.0」。
+- **配了就真的记下来了**：`display current-configuration` 显示的是**你自己敲出来的**那份配置，
+  `display this` 只看当前视图，`undo` 会把那条真删掉。
+- **不编协议表项**：OSPF 邻居、BGP 路由这些是协议算出来的状态，模拟器直接说「这条请看真机」——
+  编一张假邻居表比不给更害人。
+- **右边是官方命令库**：4569 条华为 VRP 命令，搜得到、参数看得懂、能一键填进终端；标「能敲」的
+  303 条可以直接在左边试。
+- **左边是演练队列**：剧本 / 预设 / 实验页上点「演练」，整套命令排成队列，你敲一条它勾一条。
+
+![练习场](docs/screenshots/practice.png)
 
 ---
 
@@ -265,6 +282,7 @@ npm run shots          # 启动成品自动截图，做界面回归
 ### 快捷键
 - `Ctrl+Alt+Z` — **抓下一步**：自动复制你选中的几行，告诉你 eNSP 里下一句敲什么（仅桌面版，按一次）
 - `Ctrl+Alt+X` — 显示 / 隐藏悬浮窗（仅桌面版）
+- `Ctrl+Alt+P` — 打开 / 关闭练习场（模拟器）
 - `⌘K` / `Ctrl+K` — 聚焦搜索（全站）
 - `Ctrl+I` — 打开知识包（仅桌面版）
 - `Enter` — 搜索框里直接打开第一条结果
@@ -612,6 +630,7 @@ code-atlas/
 │   ├── nextstep.js         「下一步」引擎：解析终端回显 → 匹配配置剧本（可单独验证）
 │   ├── exportcfg.js        导出配置：文件名清洗、内容整形、粘贴/加载两种模式（可单独验证）
 │   ├── ensp/               eNSP 内容分片（入门→进阶→高级 + 实验 + 命令 + 剧本）
+│   │                       └ 86-recipes-vrp.js 是官方配置步骤（构建产物，勿手改）
 │   ├── javaweb/            JavaWeb 专题分片（Servlet / JSP / JDBC / MVC / 部署 + 实训）
 │   ├── weblegacy/          Web 前端（旧版）专题分片（HTML/CSS、JS、jQuery、兼容实战）
 │   ├── packs.js            知识包引擎：解析、校验、合并、导入导出
@@ -621,6 +640,10 @@ code-atlas/
 │   ├── hud.js              悬浮窗交互：拖动、缩放、透明度、尺寸档位
 │   ├── win.js              无标题栏主窗口：拖动区开关 + 窗口按钮符号色跟皮肤走
 │   ├── hudnext.js          「下一步」面板：渲染、复制、候选切换（仅悬浮窗）
+│   ├── practice.js         练习场：终端、配置记忆、命令库、演练队列（约 900 行）
+│   ├── practice.css        练习场的样式（三栏终端界面，独立一份不吃主样式）
+│   ├── vrp/core.js         VRP 命令解析内核（analyze / suggest / enumerate，纯函数可 Node 直接跑）
+│   ├── vrp/dict.js         官方命令大全 4569 条（构建产物，懒加载，约 3 MB）
 │   └── styles.css          样式：8 套皮肤变量 + 悬浮窗透明层 + 响应式 + 安全区
 ├── electron/main.js        桌面外壳：app:// 协议、单实例、窗口记忆、悬浮窗、热键、菜单、日志
 ├── electron/preload.js     主进程 ↔ 页面桥：悬浮窗控制 + 剪贴板读写
@@ -634,7 +657,7 @@ code-atlas/
 │   ├── check-import.js     知识包导入全链路：校验 → 冲突 → 写入 → 合并 → 是否可见
 │   ├── check-search.js     搜索 25 个查询 + 首条结果断言
 │   ├── check-recipes.js    配置剧本：id / 全角符号 / **视图链** / who 连续性
-│   ├── check-nextstep.js   「下一步」引擎：46 条断言，含 42 个剧本主线批量回推
+│   ├── check-nextstep.js   「下一步」引擎：46 条断言，含 166 个剧本主线批量回推
 │   ├── check-content-semantics.js  内容语义：配置本身对不对（18 条，专抓自检抓不到的错）
 │   ├── check-export.js     导出：扩展名 / 文件名 / 空行整形 / 粘贴与加载的差异（40 条）
 │   ├── check-copysel.js    自动 Ctrl+C：真开靶子窗口验证注入真的进了剪贴板
@@ -645,6 +668,8 @@ code-atlas/
 │   ├── shot-hud.js         悬浮窗 / 窄窗口截图回归
 │   ├── shot-next.js        「下一步」面板截图 + 探针断言
 │   ├── shot-task.js        可执行任务回归：渲染 / 改参 → 进度 / 按设备复制 / 收藏与搜索
+│   ├── shot-practice.js    练习场回归：33 条断言 ×2 个尺寸（桌面 / 390 宽手机）
+│   ├── probe-practice.js   上面那个脚本注入页面执行的断言本体
 │   ├── win-probe.py        真屏截窗口（capturePage 拍不到系统标题栏和窗口按钮）
 │   ├── click-probe.py      真屏点一下再截，验「点得到 / 点不到」
 │   ├── desk-shot.py        显示桌面拍一张（看快捷方式到底画成什么图标）
@@ -654,6 +679,9 @@ code-atlas/
 ├── scripts/
 │   ├── prepare-www.js      生成 www/（Android 打包用的静态资源目录）
 │   ├── make-icon.py        从 logo.png 派生 Windows 图标 + Android 自适应图标 + 启动图
+│   ├── build-vrp-dict.js   从官方离线文档生成本地命令大全（筛模块 + 标「能敲」）
+│   ├── build-vrp-recipes.js 把官方配置步骤转成剧本（填占位符 + 丢填不出的）
+│   ├── lib/fill-vrp.js     上面两个脚本共用的「命令模板填值」规则
 │   ├── make-doc-shots.py   重截 README 里的界面图（改完界面跑一次）
 │   └── shot-regress.py     启动打包后的成品，自己截图做回归
 ├── www/                    构建产物：给 Capacitor 的纯净静态目录（勿手改）
@@ -661,7 +689,7 @@ code-atlas/
 └── README.md
 ```
 
-加载顺序 `data.js → topics.js → search.js → ensp/*.js → javaweb/*.js → weblegacy/*.js → packs.js → native.js → nextstep.js → app.js → hud.js → win.js → hudnext.js`：各专题分片先把自己的内容并进数据层（按 id 去重、按难度排序），packs.js 再把已导入的包合进来，所以应用完全不用感知「哪些是内置、哪些是导入的」。**新增分片必须排在 packs.js 之前**，否则知识包会先合并、内置内容后合，去重就不起作用了。`nextstep.js` 放在 packs.js 之后，是因为它要在「所有内容都合完」之后才建命令词汇表。
+加载顺序 `data.js → topics.js → search.js → ensp/*.js → javaweb/*.js → weblegacy/*.js → packs.js → native.js → nextstep.js → app.js → vrp/core.js → practice.js → hud.js → win.js → hudnext.js`：各专题分片先把自己的内容并进数据层（按 id 去重、按难度排序），packs.js 再把已导入的包合进来，所以应用完全不用感知「哪些是内置、哪些是导入的」。**新增分片必须排在 packs.js 之前**，否则知识包会先合并、内置内容后合，去重就不起作用了。`nextstep.js` 放在 packs.js 之后，是因为它要在「所有内容都合完」之后才建命令词汇表。
 
 **网页版零依赖零构建**，`file://` 直接打开就能跑（脚本用 `<script>` 引入，不用 fetch，无 CORS 问题）。
 `node_modules`、`electron/`、`android/` 这些都只在打包时用得上，只做网页版的话可以整块删掉。
@@ -690,7 +718,7 @@ v1.0.3 起内容分了三层：**专题（左轨大图标）→ 分类（列表�
 | 系统与脚本 | Python | 4 | 分页抓取、JSON 配置、批量生成配置、pandas 读 Excel |
 | 系统与脚本 | Git | 3 | 撤销回滚、分支合并、冲突解决 |
 
-合计 **148 片段 + 19 实验/实训 + 14 预设 + 14 工作流 + 42 配置剧本（453 步）+ 455 命令词条**，列表内按「入门 / 进阶 / 综合」分组。
+合计 **148 片段 + 19 实验/实训 + 14 预设 + 14 工作流 + 166 配置剧本（1028 步）+ 455 命令词条**，另有练习场里的 **4569 条官方命令**（不计入列表，按需加载）。列表内按「入门 / 进阶 / 综合」分组。
 
 按专题拆开看：
 
@@ -796,6 +824,31 @@ node _dev/check-grab.js       # 端到端：按一次热键 → 复制 → 面�
 把「这条命令放错视图」揪出来 —— 用户是照着剧本一行一行粘的，视图错了就是 `Command error`。
 这条检查发现过 12 处真错（`network` 该在 area 视图、`mpls` 在接口视图只是使能不是进视图等）。
 
+### 练习场是怎么做的（v1.2.0 起）
+
+**解析内核**（`assets/vrp/core.js`）不是自己写的：朋友做了个 HCIP 命令行训练场，
+里面的 `vrp-core` 是一个纯函数、不碰 DOM 的 VRP 解析器 —— 逐 token 走命令树、
+认 VRP 的缩写（`int g 0/0/1`）、每种参数有自己的校验器（掩码 / 反掩码、接口名、
+VLAN 列表）、报错文案就是真机那句。原样搬过来，只加了一个 `module.exports`，
+所以 `node -e "require('./assets/vrp/core.js').enumerate()"` 也能直接跑。
+
+**命令大全**（`assets/vrp/dict.js`，4569 条）和**官方配置步骤**（124 条剧本）
+来自另一个朋友做的 Hinstruction —— 他把华为 VRP V600R024C00 的官方帮助文档离线包
+整理成了 JSON（7496 条命令、160 套配置步骤）。两个转换脚本负责搬：
+
+| 脚本 | 做的事 |
+|---|---|
+| `scripts/build-vrp-dict.js` | 筛模块（WLAN 模板 / Telemetry / PKI 现场用不上，`其他` 里只留内核真认识的）→ 每条试敲一次标「能敲」→ 字段瘦身（说明只留 undo 之前的部分，参数范围截断） |
+| `scripts/build-vrp-recipes.js` | 把 `<占位符>` 填成示例值（`scripts/lib/fill-vrp.js`，跟命令大全同一套规则）→ 填不出来的步骤整条丢 → 去掉文档排版产物（`ospf 1 / quit / ospf 1` 这种「请从下面几种方式里选一种」） |
+
+三条踩过的坑都写在脚本注释里：`<interface-type interface-number>`（官方页面少写了一个 `>`）
+会填出 `interface 1 1`；`2001:db8::1 eui-64或ipv6 address ...`（文档用中文「或」给两种写法）
+粘过去必报错；`ip route-static` 在内核里被标成「顺手打一张路由表」，得在练习场里改回配置命令。
+
+**不编的东西**：`display ospf peer` / `display bgp routing-table` 这类表项是协议算出来的
+状态，练习场一律回「这条请看真机」，而不是给一张数字好看的假表 —— 假表比没有更害人。
+同理，练习场的接口状态恒为 up，页面上也直说了。
+
 ### 专题是怎么组织的（v1.0.3 起）
 
 以前是「一个分类 = 左轨一个小图标」，分类加到 13 个之后，侧栏变成一长条，找东西全靠记位置。
@@ -832,16 +885,18 @@ node _dev/check-grab.js       # 端到端：按一次热键 → 复制 → 面�
 
 v1.1.5 补掉的是"从看到做"这条链上最缺的一环：任务视图（一次填参 → 按设备执行 → 勾进度 → 勾验证）。
 v1.1.6 又把「做完的东西能带走」补上：导出成 `.cfg`、最近打开、来源标记。
+v1.2.0 补的是最后一环「敲得出来」：练习场（命令行模拟器）+ 4569 条官方命令 + 124 条官方配置步骤。
+v1.2.1 修的是练习场里被一条 MPLS 剧本暴露的问题（内核把 `mpls ldp` 挂错父视图、自动敲会演出报错）。
 下面还剩这些，按价值排序：
 
 1. **继续补知识包，而不是改源码** —— v1.0.1 已经把 eNSP 从二层到高级（含 IS-IS / BGP / MPLS VPN / WLAN / 防火墙）补齐，还差的是**华为以外的厂商**（Cisco / H3C / 锐捷）和**云网 / SDN 方向**。这些按格式产包即可，源码只在改功能时动。
 2. **真机验一遍 Android** —— APK 已经能装，但还没在真手机上跑过。重点看三处：底部导航是否被手势条压住、返回键层级是否顺手、导出配置与知识包的系统分享是否正常。
 3. **代码签名** —— 桌面包现在没签名，首次运行会触发 SmartScreen 提示。要给不熟悉电脑的人分发，这一步值得做。
 4. **知识包加签名** —— 现在只标了「来自哪个包」，还没法验证包有没有被改过；要防"别人给的包偷偷改了内置命令"，得加一层校验。
-5. **官方文档抓取** —— 现在词条是人工整理的，可以接文档站做结构化抽取，但要注意授权与稳定性。
-6. **代码校验** —— 对着真实设备做语法预检，配错就标红（这块需要真机或模拟器接口，成本最高）。
+5. ~~**官方文档抓取**~~ —— v1.2.0 已经用离线文档包做完了（4569 条命令 + 124 条配置步骤），缺的是**增量更新**：文档出新版本时怎么重新生成而不冲掉手工改过的地方。
+6. **整段配置预检** —— 练习场已经能对**单条命令**判对错（视图 + 参数都校验），但把一整份 `.cfg` 粘进去逐行预检还没做。这个比单条难在「上下文」：上一条把接口 shutdown 了，下一条配 IP 算不算错。
 
-> 已经做掉的：导出跑通的配置（v1.1.6）、最近打开（v1.1.6）、知识包来源标记（v1.1.6）。
+> 已经做掉的：导出跑通的配置（v1.1.6）、最近打开（v1.1.6）、知识包来源标记（v1.1.6）、官方命令全文（v1.2.0）、命令行练习场（v1.2.0）。
 
 ---
 

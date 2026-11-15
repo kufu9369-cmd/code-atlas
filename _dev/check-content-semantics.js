@@ -8,7 +8,8 @@ global.window = {};
 global.localStorage = { getItem: function () { return null; }, setItem: function () {} };
 require('../assets/data.js');
 ['00-base', '10-basic', '20-adv', '30-pro', '40-labs', '50-presets-flows',
-  '60-cmd', '70-cmd-query', '80-recipes', '82-recipes-route', '84-recipes-sec', '99-merge'
+  '60-cmd', '70-cmd-query', '80-recipes', '82-recipes-route', '84-recipes-sec',
+  '86-recipes-vrp', '99-merge'
 ].forEach(function (f) { require('../assets/ensp/' + f + '.js'); });
 
 const D = window.CODEATLAS;

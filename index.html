@@ -7,6 +7,9 @@
 <meta name="description" content="码典 CodeAtlas — 可配置的代码大全。固定部分照抄，自主部分点一下就能改。">
 <title>码典 CodeAtlas · 可配置的代码大全</title>
 <link rel="stylesheet" href="assets/styles.css">
+<!-- 练习场（命令行模拟器）的样式单独一份：它是三栏终端界面，
+     跟主窗口的列表/详情没有共用点，混进 styles.css 只会互相干扰 -->
+<link rel="stylesheet" href="assets/practice.css">
 <script>
 (function () {
   /* 首屏防闪：皮肤的 data-skin 必须在样式表之后、首个盒子画出来之前就挂好，
@@ -158,6 +161,8 @@
 <script src="assets/ensp/80-recipes.js"></script>
 <script src="assets/ensp/82-recipes-route.js"></script>
 <script src="assets/ensp/84-recipes-sec.js"></script>
+<!-- 官方配置步骤（159 条，从华为 VRP 配置指南整理；占位符已填成示例值） -->
+<script src="assets/ensp/86-recipes-vrp.js"></script>
 <script src="assets/ensp/99-merge.js"></script>
 <!-- JavaWeb 专题 -->
 <script src="assets/javaweb/00-base.js"></script>
@@ -186,6 +191,12 @@
 <script src="assets/nextstep.js"></script>
 <script src="assets/exportcfg.js"></script>
 <script src="assets/app.js"></script>
+<!-- 练习场：VRP 解析内核 + 三栏终端界面。
+     内核（assets/vrp/core.js）是朋友做的 HCIP 训练场里那个，纯函数、不碰 DOM；
+     官方命令大全（assets/vrp/dict.js，约 3 MB）不在这里加载，
+     等真正点开「命令库」才去拉，不用练习场的人一分钱启动时间都不花。 -->
+<script src="assets/vrp/core.js"></script>
+<script src="assets/practice.js"></script>
 <!-- 悬浮窗的窗口交互（拖动条 / 缩放握把 / 尺寸切换）。网页版和安卓版会整段跳过。 -->
 <script src="assets/hud.js"></script>
 <!-- 无标题栏窗口：拖动区开关 + 窗口按钮配色跟着皮肤走（仅桌面主窗口） -->

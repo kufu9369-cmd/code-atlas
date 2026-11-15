@@ -36,7 +36,7 @@ window.CODEATLAS = {
   meta: {
     name: '码典',
     en: 'CodeAtlas',
-    version: '1.1.6',
+    version: '1.2.1',
     tagline: '可配置的代码大全'
   },
 
